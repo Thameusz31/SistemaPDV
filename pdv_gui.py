@@ -74,6 +74,12 @@ class PDVGUI(ttk.Frame):
 
         self.canvas_venda.pack(side="left", fill="both", expand=True)
         self.scrollbar_venda.pack(side="right", fill="y")
+        
+        # --- NOVO: Ligar evento de roda do mouse para rolagem ---
+        self.canvas_venda.bind_all("<MouseWheel>", self._on_mouse_wheel) # Para Windows/Linux
+        # Para macOS, você pode precisar de <Button-4> (rolar para cima) e <Button-5> (rolar para baixo)
+        # self.canvas_venda.bind_all("<Button-4>", self._on_mouse_wheel)
+        # self.canvas_venda.bind_all("<Button-5>", self._on_mouse_wheel)
 
 
         # --- Sub-frames da Aba Nova Venda (AGORA DENTRO DE scrollable_frame_venda) ---
@@ -134,6 +140,10 @@ class PDVGUI(ttk.Frame):
         # Recarregar dados após a criação de todos os widgets
         self._load_vendedores_clientes_for_dropdowns() 
         self.load_vendas_historico()
+
+    def _on_mouse_wheel(self, event): # NOVO MÉTODO
+        # Role a tela com base na direção da roda do mouse
+        self.canvas_venda.yview_scroll(int(-1*(event.delta/120)), "units")
 
     def get_db_connection(self):
         conn = sqlite3.connect(DATABASE_NAME)
@@ -720,7 +730,7 @@ class PDVGUI(ttk.Frame):
         # Calcula o subtotal para ver o máximo de desconto de pontos aplicável
         current_desconto_manual_valor = 0.0
         try:
-            desconto_manual_str = self.desconto_entry_var.get().replace(',', '.') # Pega do StringVar
+            desconto_manual_str = self.desconto_entry_var.get().replace(',', '.')
             if self.desconto_tipo_var.get() == "Percentual":
                 desconto_percent = float(desconto_manual_str)
                 current_desconto_manual_valor = self.total_venda * (desconto_percent / 100)
@@ -732,11 +742,9 @@ class PDVGUI(ttk.Frame):
         # Considera juros já calculados no remaining_total
         # Ajustei o cálculo aqui para usar o total_venda menos o desconto manual (e antes dos juros)
         # para a validação do valor máximo de pontos.
-        # Calcula o total APÓS desconto manual e ANTES dos juros e pontos
-        total_para_validar_pontos = self.total_venda - current_desconto_manual_valor
-        
+        total_para_validar_pontos = self.total_venda - current_desconto_manual_valor 
 
-        if valor_desconto_pontos > total_para_validar_pontos: # Compara com o total_para_validar_pontos
+        if valor_desconto_pontos > total_para_validar_pontos:
             messagebox.showwarning("Aviso", "O valor de utilização de pontos excede o total restante da venda. Aplicando o máximo possível.", parent=self.master)
             valor_desconto_pontos = total_para_validar_pontos
             pontos_a_utilizar = int(valor_desconto_pontos / self.VALOR_POR_PONTO)
@@ -767,8 +775,8 @@ class PDVGUI(ttk.Frame):
             self.juros_aplicados = 0.0
             self.total_final_com_desconto = 0.0
             self.pontos_utilizados = 0
-            self.desconto_entry_var.set("0.00") # Usa o StringVar para setar o valor
-            self.juros_entry_var.set("0.00") # Usa o StringVar para setar o valor
+            self.desconto_entry_var.set("0.00")
+            self.juros_entry_var.set("0.00")
             self.pontos_utilizar_entry.delete(0, tk.END)
             self.pontos_utilizar_entry.insert(0, "0")
             self.utilizar_valor_label.config(text="Valor Utilizado: R$ 0.00")
@@ -786,7 +794,7 @@ class PDVGUI(ttk.Frame):
         
         # Validação do desconto
         try:
-            desconto_valor_input = float(self.desconto_entry_var.get().replace(',', '.')) # Pega do StringVar
+            desconto_valor_input = float(self.desconto_entry_var.get().replace(',', '.'))
         except ValueError:
             messagebox.showerror("Erro de Validação", "Valor do desconto inválido. Use um número.", parent=self.master)
             return
@@ -800,7 +808,7 @@ class PDVGUI(ttk.Frame):
         
         # Validação dos Juros
         try:
-            juros_valor_input = float(self.juros_entry_var.get().replace(',', '.')) # Pega do StringVar
+            juros_valor_input = float(self.juros_entry_var.get().replace(',', '.'))
         except ValueError:
             messagebox.showerror("Erro de Validação", "Valor dos juros inválido. Use um número.", parent=self.master)
             return
@@ -900,15 +908,12 @@ class PDVGUI(ttk.Frame):
                     cursor.execute("INSERT INTO movimentacoes_pontos (cliente_id, data_hora, tipo_movimentacao, pontos, referencia_id, motivo) VALUES (?, ?, ?, ?, ?, ?)",
                                    (cliente_id, data_hora, "Utilizacao", self.pontos_utilizados, venda_id, "Desconto na Compra"))
             
-            # 5. Registrar Movimentação no Caixa (NOVO)
-            # A venda é uma Entrada no caixa
-            responsavel_id = vendedor_id # O vendedor da venda é o responsável pela movimentação
+            # 5. Registrar Movimentação no Caixa
+            responsavel_id = vendedor_id
             forma_pag = forma_pagamento
             descricao_mov = f"Venda ID {venda_id}"
             
-            # Se for a prazo, a entrada no caixa só ocorre quando a parcela é paga.
-            # Se for Dinheiro, Cartao, Pix, a entrada no caixa ocorre agora.
-            if forma_pagamento != "A Prazo":
+            if forma_pagamento != "A Prazo": # Entradas de vendas à vista
                 cursor.execute("INSERT INTO movimentacoes_caixa (data_hora, tipo, valor, forma_pagamento, descricao, referencia_id, tabela_referencia, responsavel_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                                (data_hora, "Entrada", self.total_final_com_desconto, forma_pag, descricao_mov, venda_id, "vendas", responsavel_id))
 
@@ -918,9 +923,9 @@ class PDVGUI(ttk.Frame):
                                 f"Pontos Ganhos: {pontos_ganhos if cliente_id else 0}\n"
                                 f"Pontos Utilizados: {self.pontos_utilizados}")
             
-            self.clear_cart() # Reseta o carrinho, campos de desconto/juros/pontos.
-            self._load_vendedores_clientes_for_dropdowns() # Recarrega dropdowns para ver saldo de pontos atualizado
-            self.load_vendas_historico() # Atualiza histórico de vendas
+            self.clear_cart()
+            self._load_vendedores_clientes_for_dropdowns()
+            self.load_vendas_historico()
             self.selected_vendedor_var.set("-- Selecione --")
             self.selected_cliente_var.set("-- Selecione --")
             self.sku_entry.focus_set()
