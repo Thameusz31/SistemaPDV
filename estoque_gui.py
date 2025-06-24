@@ -2,51 +2,59 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 import sqlite3
 from database import DATABASE_NAME
-from datetime import datetime
+from datetime import datetime, date
 
-# A CLASSE AGORA HERDA DE ttk.Frame
 class EstoqueGUI(ttk.Frame):
-    def __init__(self, master): # 'master' é o frame pai que vem do MainApp
-        # CHAMA O CONSTRUTOR DA CLASSE PAI (ttk.Frame)
-        super().__init__(master, padding="15") # <--- ALTERAÇÃO AQUI
-        self.master = master # Mantém a referência ao frame pai se precisar
-
-        # REMOVER: master.title(...), master.geometry(...), etc.
+    def __init__(self, master):
+        super().__init__(master, padding="15")
+        self.master = master
 
         self.conn = self.get_db_connection()
 
-        # --- Notebook (Abas) para organizar Entradas/Ajustes e Relatórios de Estoque ---
-        self.notebook = ttk.Notebook(self) # Notebook agora é filho de self (este frame)
-        self.notebook.pack(fill="both", expand=True)
+        # Variáveis StringVar que controlarão o texto dos Entry widgets
+        self.selected_produto_var = tk.StringVar(value="-- Selecione o Produto --")
+        self.tipo_mov_var = tk.StringVar(value="Entrada")
+        self.quantidade_mov_var = tk.StringVar(value="")
+        self.custo_unitario_mov_var = tk.StringVar(value="0.00")
+        self.motivo_mov_var = tk.StringVar(value="")
+        self.filter_estoque_status_var = tk.StringVar(value="Todos")
+        self.data_inicio_mov_var = tk.StringVar(value=(datetime.now().replace(day=1)).strftime("%Y-%m-%d"))
+        self.data_fim_mov_var = tk.StringVar(value=datetime.now().strftime("%Y-%m-%d"))
+        self.filter_tipo_mov_var = tk.StringVar(value="Todos")
 
-        # Aba de Movimentação (Entrada/Ajuste)
-        self.tab_movimentacao = ttk.Frame(self.notebook, padding="10")
-        self.notebook.add(self.tab_movimentacao, text="Movimentação de Estoque")
-        self.create_movimentacao_widgets(self.tab_movimentacao)
+        self.formas_pagamento_caixa_options = ["Dinheiro", "Cartao", "Pix", "Recebimento Parcela", "Outros"]
+        self.tipos_movimentacao_options = ["Todos", "Entrada", "Saida", "Ajuste"]
 
-        # Aba de Produtos em Estoque / Baixo Estoque
-        self.tab_estoque_atual = ttk.Frame(self.notebook, padding="10")
-        self.notebook.add(self.tab_estoque_atual, text="Estoque Atual e Alertas")
-        self.create_estoque_atual_widgets(self.tab_estoque_atual)
+        self.produtos_dict = {}
+        self.vendedores_dict = {}
 
-        # Aba de Histórico de Movimentações
-        self.tab_historico_mov = ttk.Frame(self.notebook, padding="10")
-        self.notebook.add(self.tab_historico_mov, text="Histórico de Movimentações")
-        self.create_historico_mov_widgets(self.tab_historico_mov)
-        
+        self.create_widgets()
+        self._load_vendedores_for_dropdown()
         self.load_produtos_for_dropdown()
         self.load_estoque_atual()
         self.load_historico_movimentacoes()
+
 
     def get_db_connection(self):
         conn = sqlite3.connect(DATABASE_NAME)
         conn.row_factory = sqlite3.Row
         return conn
 
+    def _load_vendedores_for_dropdown(self):
+        conn = self.get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, nome FROM vendedores ORDER BY nome")
+        vendedores_db = cursor.fetchall()
+        conn.close()
+
+        self.vendedores_dict = {}
+        for v in vendedores_db:
+            self.vendedores_dict[v['nome']] = v['id']
+
     def load_produtos_for_dropdown(self):
         conn = self.get_db_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT id, nome, sku FROM produtos ORDER BY nome")
+        cursor.execute("SELECT id, nome, sku, preco_venda, quantidade FROM produtos")
         produtos_db = cursor.fetchall()
         conn.close()
 
@@ -64,37 +72,49 @@ class EstoqueGUI(ttk.Frame):
         self.selected_produto_var.set(produtos_nomes_sku[0])
 
 
+    def create_widgets(self):
+        self.notebook = ttk.Notebook(self)
+        self.notebook.pack(pady=10, padx=10, fill="both", expand=True)
+
+        self.tab_movimentacao = ttk.Frame(self.notebook, padding="10")
+        self.notebook.add(self.tab_movimentacao, text="Movimentação de Estoque")
+        self.create_movimentacao_widgets(self.tab_movimentacao)
+
+        self.tab_estoque_atual = ttk.Frame(self.notebook, padding="10")
+        self.notebook.add(self.tab_estoque_atual, text="Estoque Atual e Alertas")
+        self.create_estoque_atual_widgets(self.tab_estoque_atual)
+
+        self.tab_historico_mov = ttk.Frame(self.notebook, padding="10")
+        self.notebook.add(self.tab_historico_mov, text="Histórico de Movimentações")
+        self.create_historico_mov_widgets(self.tab_historico_mov)
+
+
     def create_movimentacao_widgets(self, parent_frame):
-        # Seleção de Produto
         ttk.Label(parent_frame, text="Produto:").grid(row=0, column=0, sticky="w", pady=5, padx=5)
-        self.selected_produto_var = tk.StringVar(value="-- Selecione o Produto --")
-        self.produto_dropdown = ttk.OptionMenu(parent_frame, self.selected_produto_var, "") # Placeholder vazio
+        self.produto_dropdown = ttk.OptionMenu(parent_frame, self.selected_produto_var, "")
         self.produto_dropdown.grid(row=0, column=1, columnspan=2, sticky="ew", pady=5, padx=5)
         self.produto_dropdown.config(width=40)
 
-        # Tipo de Movimentação
-        ttk.Label(parent_frame, text="Tipo:").grid(row=1, column=0, sticky="w", pady=5, padx=5)
-        self.tipo_mov_var = tk.StringVar(value="Entrada")
+        ttk.Label(parent_frame, text="Tipo:").grid(row=1, column=0, sticky="w", padx=5, pady=2)
         ttk.Radiobutton(parent_frame, text="Entrada", value="Entrada", variable=self.tipo_mov_var).grid(row=1, column=1, sticky="w", padx=5)
         ttk.Radiobutton(parent_frame, text="Ajuste (+/-)", value="Ajuste", variable=self.tipo_mov_var).grid(row=1, column=2, sticky="w", padx=5)
 
-        # Quantidade
         ttk.Label(parent_frame, text="Quantidade:").grid(row=2, column=0, sticky="w", pady=5, padx=5)
-        self.quantidade_mov_entry = ttk.Entry(parent_frame, width=10)
-        self.quantidade_mov_entry.grid(row=2, column=1, sticky="w", pady=5, padx=5)
+        self.quantidade_mov_entry_widget = ttk.Entry(parent_frame, textvariable=self.quantidade_mov_var, width=10)
+        self.quantidade_mov_entry_widget.grid(row=2, column=1, sticky="w", pady=5, padx=5)
+        self.quantidade_mov_entry_widget.bind("<FocusOut>", lambda event=None: self.fill_default_if_empty(self.quantidade_mov_var, "0"))
 
-        # Custo Unitário (relevante para Entrada)
         ttk.Label(parent_frame, text="Custo Unitário (Entrada):").grid(row=3, column=0, sticky="w", pady=5, padx=5)
-        self.custo_unitario_mov_entry = ttk.Entry(parent_frame, width=10)
-        self.custo_unitario_mov_entry.grid(row=3, column=1, sticky="w", pady=5, padx=5)
-        self.custo_unitario_mov_entry.insert(0, "0.00")
+        self.custo_unitario_mov_entry_widget = ttk.Entry(parent_frame, textvariable=self.custo_unitario_mov_var, width=10)
+        self.custo_unitario_mov_entry_widget.grid(row=3, column=1, sticky="w", pady=5, padx=5)
+        self.custo_unitario_mov_var.trace_add("write", lambda n, i, m: self.custo_unitario_mov_var.set(self.format_currency_input(self.custo_unitario_mov_var.get())))
+        self.custo_unitario_mov_entry_widget.bind("<FocusOut>", lambda event=None: self.fill_default_if_empty(self.custo_unitario_mov_var, "0.00"))
 
-        # Motivo
+
         ttk.Label(parent_frame, text="Motivo:").grid(row=4, column=0, sticky="w", pady=5, padx=5)
-        self.motivo_mov_entry = ttk.Entry(parent_frame, width=50)
-        self.motivo_mov_entry.grid(row=4, column=1, columnspan=2, sticky="ew", pady=5, padx=5)
+        self.motivo_mov_entry_widget = ttk.Entry(parent_frame, textvariable=self.motivo_mov_var, width=50)
+        self.motivo_mov_entry_widget.grid(row=4, column=1, columnspan=2, sticky="ew", pady=5, padx=5)
 
-        # Botão de Salvar Movimentação
         ttk.Button(parent_frame, text="Registrar Movimentação", command=self.registrar_movimentacao, style='Accent.TButton').grid(row=5, column=0, columnspan=3, pady=15)
         
         parent_frame.columnconfigure(1, weight=1)
@@ -105,11 +125,11 @@ class EstoqueGUI(ttk.Frame):
             messagebox.showwarning("Aviso", "Por favor, selecione um produto.")
             return
 
-        produto_id = self.produtos_dict[produto_nome_sku]
+        produto_id = self.produtos_dict[produto_nome_sku]['id']
         tipo_mov = self.tipo_mov_var.get().strip()
-        quantidade_str = self.quantidade_mov_entry.get().strip()
-        motivo = self.motivo_mov_entry.get().strip()
-        custo_str = self.custo_unitario_mov_entry.get().strip()
+        quantidade_str = self.quantidade_mov_var.get().strip()
+        motivo = self.motivo_mov_var.get().strip()
+        custo_str = self.custo_unitario_mov_var.get().strip()
 
         if not quantidade_str:
             messagebox.showwarning("Aviso", "Por favor, digite a quantidade.")
@@ -128,7 +148,7 @@ class EstoqueGUI(ttk.Frame):
             return
 
         custo_unitario = 0.0
-        if tipo_mov == "Entrada" or tipo_mov == "Ajuste": # Custo relevante para entrada e ajuste
+        if tipo_mov == "Entrada" or tipo_mov == "Ajuste":
             if not custo_str:
                 if messagebox.askyesno("Confirmação", "Custo unitário está vazio. Deseja prosseguir com 0.00?", parent=self.master):
                     custo_unitario = 0.0
@@ -145,12 +165,10 @@ class EstoqueGUI(ttk.Frame):
         cursor = conn.cursor()
         
         try:
-            # 1. Registrar a movimentação na tabela
             data_hora = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             cursor.execute("INSERT INTO movimentacoes_estoque (produto_id, tipo_movimentacao, quantidade, data_hora, motivo, custo_unitario_movimentacao) VALUES (?, ?, ?, ?, ?, ?)",
                            (produto_id, tipo_mov, quantidade, data_hora, motivo, custo_unitario))
             
-            # 2. Atualizar a quantidade no estoque do produto
             current_qty_query = cursor.execute("SELECT quantidade FROM produtos WHERE id = ?", (produto_id,)).fetchone()
             current_qty = current_qty_query['quantidade'] if current_qty_query else 0
 
@@ -158,7 +176,7 @@ class EstoqueGUI(ttk.Frame):
             if tipo_mov == "Entrada":
                 new_qty += quantidade
             elif tipo_mov == "Ajuste":
-                new_qty += quantidade # Se quantidade for negativa, ele subtrai
+                new_qty += quantidade
             # 'Saída' via PDV já é tratada lá e não vem por aqui.
 
             if new_qty < 0:
@@ -182,25 +200,22 @@ class EstoqueGUI(ttk.Frame):
 
     def clear_movimentacao_form(self):
         self.selected_produto_var.set("-- Selecione o Produto --")
-        self.quantidade_mov_entry.delete(0, tk.END)
-        self.motivo_mov_entry.delete(0, tk.END)
-        self.custo_unitario_mov_entry.delete(0, tk.END)
-        self.custo_unitario_mov_entry.insert(0, "0.00")
+        self.quantidade_mov_var.set("")
+        self.motivo_mov_var.set("")
+        self.custo_unitario_mov_var.set("0.00")
         self.tipo_mov_var.set("Entrada")
         
     def create_estoque_atual_widgets(self, parent_frame):
-        # Frame de filtros para estoque atual
         filter_frame = ttk.Frame(parent_frame, padding="5")
         filter_frame.pack(pady=5, fill="x")
 
-        ttk.Label(filter_frame, text="Status:").pack(side="left", padx=5)
+        ttk.Label(filter_frame, text="Status:").pack(side="left", padx=5) # REMOVIDO background='white'
         self.filter_estoque_status_var = tk.StringVar(value="Todos")
         filter_status_options = ["Todos", "Em Estoque", "Abaixo do Mínimo", "Esgotado"]
         self.filter_estoque_status_menu = ttk.OptionMenu(filter_frame, self.filter_estoque_status_var, *filter_status_options)
         self.filter_estoque_status_menu.pack(side="left", padx=2)
         ttk.Button(filter_frame, text="Atualizar", command=self.load_estoque_atual).pack(side="left", padx=10)
 
-        # Treeview para estoque atual
         columns = ("ID", "SKU", "Nome", "Marca", "Quantidade", "Estoque Mínimo", "Status")
         self.estoque_tree = ttk.Treeview(parent_frame, columns=columns, show="headings", selectmode="browse")
 
@@ -244,38 +259,33 @@ class EstoqueGUI(ttk.Frame):
             tags = ()
             if p['quantidade'] <= 0:
                 status = "Esgotado"
-                tags = ('esgotado',) # Tag para cor
+                tags = ('esgotado',)
             elif p['quantidade'] <= p['estoque_minimo']:
                 status = "Abaixo do Mínimo"
-                tags = ('baixo',) # Tag para cor
+                tags = ('baixo',)
             
             if filter_status == "Todos" or status == filter_status:
                 self.estoque_tree.insert("", "end", values=(p['id'], p['sku'], p['nome'], p['marca'], p['quantidade'], p['estoque_minimo'], status), tags=tags)
 
     def create_historico_mov_widgets(self, parent_frame):
-        # Filtros para histórico de movimentações
         filter_mov_frame = ttk.Frame(parent_frame, padding="5")
         filter_mov_frame.pack(pady=5, fill="x")
 
-        ttk.Label(filter_mov_frame, text="De:").grid(row=0, column=0, sticky="w", padx=2, pady=2)
-        self.data_inicio_mov_entry = ttk.Entry(filter_mov_frame, width=12)
+        ttk.Label(filter_mov_frame, text="De:").grid(row=0, column=0, sticky="w", padx=2, pady=2) # REMOVIDO background='white'
+        self.data_inicio_mov_entry = ttk.Entry(filter_mov_frame, textvariable=self.data_inicio_mov_var, width=12)
         self.data_inicio_mov_entry.grid(row=0, column=1, sticky="ew", padx=2, pady=2)
-        self.data_inicio_mov_entry.insert(0, (datetime.now().replace(day=1)).strftime("%Y-%m-%d"))
         
-        ttk.Label(filter_mov_frame, text="Até:").grid(row=0, column=2, sticky="w", padx=2, pady=2)
-        self.data_fim_mov_entry = ttk.Entry(filter_mov_frame, width=12)
+        ttk.Label(filter_mov_frame, text="Até:").grid(row=0, column=2, sticky="w", padx=2, pady=2) # REMOVIDO background='white'
+        self.data_fim_mov_entry = ttk.Entry(filter_mov_frame, textvariable=self.data_fim_mov_var, width=12)
         self.data_fim_mov_entry.grid(row=0, column=3, sticky="ew", padx=2, pady=2)
         self.data_fim_mov_entry.insert(0, datetime.now().strftime("%Y-%m-%d"))
 
-        ttk.Label(filter_mov_frame, text="Tipo:").grid(row=1, column=0, sticky="w", padx=5, pady=2)
-        self.filter_tipo_mov_var = tk.StringVar(value="Todos")
-        filter_tipo_mov_options = ["Todos", "Entrada", "Saída", "Ajuste"]
-        self.filter_tipo_mov_menu = ttk.OptionMenu(filter_mov_frame, self.filter_tipo_mov_var, *filter_tipo_mov_options)
+        ttk.Label(filter_mov_frame, text="Tipo:").grid(row=1, column=0, sticky="w", padx=5, pady=2) # REMOVIDO background='white'
+        self.filter_tipo_mov_menu = ttk.OptionMenu(filter_mov_frame, self.filter_tipo_mov_var, self.tipos_movimentacao_options[0], *self.tipos_movimentacao_options)
         self.filter_tipo_mov_menu.grid(row=1, column=1, sticky="ew", padx=2, pady=2)
         
         ttk.Button(filter_mov_frame, text="Filtrar", command=self.load_historico_movimentacoes).grid(row=1, column=2, columnspan=2, padx=10, sticky="ew")
 
-        # Treeview para histórico de movimentações
         columns = ("ID Mov.", "Data/Hora", "Produto", "SKU", "Tipo", "Quantidade", "Custo Unit. Mov.", "Motivo")
         self.historico_mov_tree = ttk.Treeview(parent_frame, columns=columns, show="headings", selectmode="browse")
 
@@ -320,8 +330,8 @@ class EstoqueGUI(ttk.Frame):
         """
         params = []
 
-        data_inicio = self.data_inicio_mov_entry.get()
-        data_fim = self.data_fim_mov_entry.get()
+        data_inicio = self.data_inicio_mov_var.get()
+        data_fim = self.data_fim_mov_var.get()
         tipo_mov_filtro = self.filter_tipo_mov_var.get()
 
         if data_inicio:
@@ -344,10 +354,41 @@ class EstoqueGUI(ttk.Frame):
             self.historico_mov_tree.insert("", "end", values=(
                 mov['id'],
                 mov['data_hora'],
-                mov['nome'],
-                mov['sku'],
                 mov['tipo_movimentacao'],
                 mov['quantidade'],
                 f"R$ {mov['custo_unitario_movimentacao']:.2f}" if mov['custo_unitario_movimentacao'] is not None else "N/A",
                 mov['motivo']
             ))
+
+    def fill_default_if_empty(self, string_var, default_value):
+        if not string_var.get().strip():
+            string_var.set(default_value)
+
+    def format_currency_input(self, text_input):
+        clean_text = ''.join(filter(lambda x: x.isdigit() or x in ['.', ','], text_input))
+        clean_text = clean_text.replace(',', '.')
+
+        if clean_text.count('.') > 1:
+            parts = clean_text.split('.')
+            clean_text = parts[0] + '.' + ''.join(parts[1:])
+
+        if '.' in clean_text:
+            integer_part, decimal_part = clean_text.split('.')
+            clean_text = integer_part + '.' + decimal_part[:2]
+
+        if clean_text.startswith('0') and len(clean_text) > 1 and clean_text[1].isdigit():
+            if '.' not in clean_text:
+                clean_text = clean_text.lstrip('0') or '0'
+            elif clean_text.index('.') > 1:
+                 clean_text = clean_text.lstrip('0')
+                 if clean_text.startswith('.'):
+                     clean_text = '0' + clean_text
+        if not clean_text:
+            return ""
+        return clean_text
+
+    def format_integer_input(self, text_input):
+        clean_text = ''.join(filter(str.isdigit, text_input))
+        if clean_text.startswith('0') and len(clean_text) > 1:
+            clean_text = clean_text.lstrip('0') or '0'
+        return clean_text

@@ -1,10 +1,8 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
 import sqlite3
-# CORREÇÃO: Importar datetime e timedelta
+from database import DATABASE_NAME
 from datetime import datetime, timedelta
-
-from database import DATABASE_NAME 
 
 class APrazoGUI(ttk.Frame):
     def __init__(self, master):
@@ -21,8 +19,7 @@ class APrazoGUI(ttk.Frame):
         self.create_filter_widgets(self)
         self.create_parcelas_widgets(self)
         
-        self.clientes_dict = {} 
-        
+        self.clientes_dict = {}
         self._load_clientes_for_filter()
         self.load_parcelas()
 
@@ -61,20 +58,20 @@ class APrazoGUI(ttk.Frame):
         self.filter_frame.columnconfigure(3, weight=1)
         self.filter_frame.columnconfigure(5, weight=1)
 
-        ttk.Label(self.filter_frame, text="Vencimento De:").grid(row=0, column=0, sticky="w", padx=5, pady=5)
+        ttk.Label(self.filter_frame, text="Vencimento De:").grid(row=0, column=0, sticky="w", padx=5, pady=5) # REMOVIDO background='white'
         self.data_venc_inicio_entry = ttk.Entry(self.filter_frame, width=15)
         self.data_venc_inicio_entry.grid(row=0, column=1, sticky="ew", padx=5, pady=5)
         
-        ttk.Label(self.filter_frame, text="Vencimento Até:").grid(row=0, column=2, sticky="w", padx=5, pady=5)
+        ttk.Label(self.filter_frame, text="Vencimento Até:").grid(row=0, column=2, sticky="w", padx=5, pady=5) # REMOVIDO background='white'
         self.data_venc_fim_entry = ttk.Entry(self.filter_frame, width=15)
         self.data_venc_fim_entry.grid(row=0, column=3, sticky="ew", padx=5, pady=5)
         self.data_venc_fim_entry.insert(0, (datetime.now() + timedelta(days=30)).strftime("%Y-%m-%d"))
 
-        ttk.Label(self.filter_frame, text="Status:").grid(row=0, column=4, sticky="w", padx=5, pady=5)
+        ttk.Label(self.filter_frame, text="Status:").grid(row=0, column=4, sticky="w", padx=5, pady=5) # REMOVIDO background='white'
         self.filter_status_menu = ttk.OptionMenu(self.filter_frame, self.filter_status_var, self.filter_status_options[0], *self.filter_status_options)
         self.filter_status_menu.grid(row=0, column=5, sticky="ew", padx=5, pady=5)
 
-        ttk.Label(self.filter_frame, text="Cliente:").grid(row=1, column=0, sticky="w", padx=5, pady=5)
+        ttk.Label(self.filter_frame, text="Cliente:").grid(row=1, column=0, sticky="w", padx=5, pady=5) # REMOVIDO background='white'
         self.filter_cliente_menu = ttk.OptionMenu(self.filter_frame, self.filter_cliente_var, "Todos")
         self.filter_cliente_menu.grid(row=1, column=1, sticky="ew", padx=5, pady=5)
 
@@ -168,7 +165,7 @@ class APrazoGUI(ttk.Frame):
             tags = ()
             
             if current_status == 'Pendente' and parc['data_vencimento'] < datetime.now().strftime("%Y-%m-%d"):
-                current_status = 'Atrasado'
+                current_status = 'Atrasada' # Corrigido para 'Atrasada' para consistência
                 tags = ('overdue',)
             elif current_status == 'Pendente':
                 tags = ('pending',)
@@ -209,14 +206,13 @@ class APrazoGUI(ttk.Frame):
             conn = self.get_db_connection()
             cursor = conn.cursor()
             try:
-                data_pagamento_atual = datetime.now().strftime("%Y-%m-%d %H:%M:%S") # Pegar data e hora exata para o caixa
-                cursor.execute("UPDATE parcelas SET status = 'Pago', data_pagamento = ? WHERE id = ?", (data_pagamento_atual.split(' ')[0], parcela_id)) # Só a data para o campo data_pagamento
+                data_pagamento_atual = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                cursor.execute("UPDATE parcelas SET status = 'Pago', data_pagamento = ? WHERE id = ?", (data_pagamento_atual.split(' ')[0], parcela_id))
                 
                 # Incrementa o contador de parcelas pagas na tabela 'vendas'
                 cursor.execute("UPDATE vendas SET parcelas_pagas = parcelas_pagas + 1 WHERE id = ?", (venda_id,))
 
                 # NOVO: Registrar movimentação no Caixa
-                # Primeiro, busque os dados da parcela e venda associada para obter valor, forma de pgto original, etc.
                 cursor.execute("""
                     SELECT p.numero_parcela, p.valor_parcela, v.parcelas_total, v.forma_pagamento, v.tipo_cartao, v.vendedor_id, v.cliente_id
                     FROM parcelas p JOIN vendas v ON p.venda_id = v.id WHERE p.id = ?
@@ -225,21 +221,21 @@ class APrazoGUI(ttk.Frame):
 
                 if parcela_data:
                     valor_parcela_paga = parcela_data['valor_parcela']
-                    forma_pag_venda = parcela_data['forma_pagamento'] # A forma de pagamento original da venda
-                    tipo_cartao_venda = parcela_data['tipo_cartao'] # Tipo de cartão da venda original (se houver)
-                    responsavel_id = parcela_data['vendedor_id'] # Vendedor associado à venda original
-                    cliente_id_venda = parcela_data['cliente_id'] # Cliente associado à venda original
+                    forma_pag_venda = parcela_data['forma_pagamento']
+                    tipo_cartao_venda = parcela_data['tipo_cartao']
+                    responsavel_id = parcela_data['vendedor_id']
+                    cliente_id_venda = parcela_data['cliente_id']
 
-                    # Para a forma_pagamento na movimentacoes_caixa, seremos mais específicos:
-                    # Se a venda original foi 'A Prazo', o recebimento da parcela é agora.
-                    # Podemos considerar que essa parcela foi paga em dinheiro, cartão, ou pix.
-                    # Para simplificar agora, registraremos como "A Prazo - Recebimento".
-                    # Em um sistema real, aqui o vendedor escolheria como a parcela foi paga.
-                    
                     descricao_mov = f"Pagamento Parcela {parcela_data['numero_parcela']}/{parcela_data['parcelas_total']} - Venda ID {venda_id}"
                     
-                    cursor.execute("INSERT INTO movimentacoes_caixa (data_hora, tipo, valor, forma_pagamento, descricao, referencia_id, tabela_referencia, responsavel_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                                   (data_pagamento_atual, "Entrada", valor_parcela_paga, "Recebimento Parcela", # Pode-se registrar a forma real de pagamento da parcela aqui
+                    forma_pagamento_para_caixa = "Recebimento Parcela"
+                    if forma_pag_venda == "Cartao" and tipo_cartao_venda:
+                        forma_pagamento_para_caixa = f"Parcela - {tipo_cartao_venda}"
+                    elif forma_pag_venda == "Dinheiro" or forma_pag_venda == "Pix":
+                         forma_pagamento_para_caixa = f"Parcela - {forma_pag_venda}"
+                    
+                    cursor.execute("INSERT INTO movimentacoes_caixa (data_hora, tipo_movimentacao, valor, forma_pagamento, descricao, referencia_id, tabela_referencia, responsavel_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                                   (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "Entrada", valor_parcela_paga, forma_pagamento_para_caixa,
                                     descricao_mov, parcela_id, "parcelas", responsavel_id))
 
 

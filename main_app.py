@@ -10,7 +10,7 @@ from clientes_gui import ClientesGUI
 from relatorios_gui import RelatoriosGUI
 from estoque_gui import EstoqueGUI
 from aprazo_gui import APrazoGUI
-from caixa_gui import CaixaGUI # NOVO
+from caixa_gui import CaixaGUI
 
 class MainApp:
     def __init__(self, master):
@@ -18,28 +18,44 @@ class MainApp:
         master.title("Sistema Loja Streetwear - Gestão Integrada")
         master.geometry("1200x800")
         try:
-            master.state('zoomed')
+            master.state('zoomed') # Inicia maximizado em Windows/Linux
         except:
-            master.attributes('-fullscreen', True)
+            master.attributes('-fullscreen', True) # Para tela cheia completa no macOS/outros
 
+        # --- Aplica um tema moderno e configura estilos globais ---
         self.style = ttk.Style()
         try:
             self.style.theme_use('clam')
         except tk.TclError:
             print("Tema 'clam' não disponível, usando tema padrão.")
 
+        # Configurações de estilo para fontes e paddings
         self.style.configure('TButton', font=('Arial', 10), padding=8)
-        self.style.configure('TLabel', font=('Arial', 10))
         self.style.configure('TEntry', padding=5)
-        self.style.configure('TLabelframe.Label', font=('Arial', 12, 'bold'))
+        
+        # --- CORREÇÃO AQUI: Força o background do TFrame e TLabelframe para branco ---
+        self.style.configure('TFrame', background='white') # Define background para todos os ttk.Frame
+        
+        # Configurações para TLabelframe (incluindo o fundo do label do título)
+        self.style.configure('TLabelframe', background='white', borderwidth=2, relief='flat') # Mudado para 'flat' para menos sombra
+        self.style.configure('TLabelframe.Label', font=('Arial', 12, 'bold'), foreground='#333333', background='white') # Força background branco para o texto do LabelFrame
+
+        # --- CORREÇÃO AQUI: Configura o background do TLabel e TRadiobutton ---
+        # Removido background='white' dos Labels individuais nos GUIs
+        self.style.configure('TLabel', font=('Arial', 10), background='white') # Força background branco para todos os ttk.Label
+        self.style.configure('TRadiobutton', background='white', foreground='#333333') # Força background branco para Radiobuttons
+        self.style.configure('TCheckbutton', background='white', foreground='#333333') # Para caso de Checkbuttons no futuro
+
+        # Estilos para botões de destaque e perigo
         self.style.configure('Accent.TButton', background='#4CAF50', foreground='white')
         self.style.map('Accent.TButton',
                        background=[('active', '#66BB6A'), ('!disabled', '#4CAF50')],
                        foreground=[('active', 'white'), ('!disabled', 'white')])
         self.style.configure('Danger.TButton', background='#F44336', foreground='white')
         self.style.map('Danger.TButton',
-                       background=[('active', '#E57373'), ('!disabled', '#F44336')],
+                       background=[('active', '#E57370'), ('!disabled', '#F44336')], # Ajuste sutil na cor ativa
                        foreground=[('active', 'white'), ('!disabled', 'white')])
+        # Estilos para cores de status em Treeview
         self.style.configure('Overdue.Treeview.Row', background='#FFCDD2', foreground='#D32F2F')
         self.style.configure('Pending.Treeview.Row', background='#FFF9C4', foreground='#F57F17')
         self.style.configure('Paid.Treeview.Row', background='#C8E6C9', foreground='#2E7D32')
@@ -52,71 +68,76 @@ class MainApp:
         self.menu_frame.pack(side="left", fill="y")
         self.menu_frame.pack_propagate(False)
 
-        ttk.Label(self.menu_frame, text="MENU", font=("Arial", 18, "bold"), anchor="center").pack(pady=15, fill="x")
+        ttk.Label(self.menu_frame, text="MENU", font=("Arial", 18, "bold"), anchor="center", foreground="#333333").pack(pady=15, fill="x")
 
-        # Itens do Menu (Botões)
-        menu_items = [
-            {"text": "Gerenciar Produtos", "command": lambda: self.show_frame("produtos")},
-            {"text": "Gerenciar Vendedores", "command": lambda: self.show_frame("vendedores")},
-            {"text": "Gerenciar Clientes", "command": lambda: self.show_frame("clientes")},
-            {"text": "Gestão de Estoque", "command": lambda: self.show_frame("estoque")},
-            {"text": "Abrir PDV e Histórico", "command": lambda: self.show_frame("pdv")},
-            {"text": "Ver Vendas A Prazo", "command": lambda: self.show_frame("aprazo")},
-            {"text": "Controle de Caixa", "command": lambda: self.show_frame("caixa")}, # NOVO BOTÃO
-            {"text": "Ver Relatórios", "command": lambda: self.show_frame("relatorios")},
-            {"text": "Sair", "command": master.quit}
-        ]
+        # Mapeamento de teclas de função para módulos e seus nomes de frame
+        self.module_map = {
+            "F1": {"text": "Gerenciar Produtos", "frame_name": "produtos"},
+            "F2": {"text": "Gerenciar Vendedores", "frame_name": "vendedores"},
+            "F3": {"text": "Gerenciar Clientes", "frame_name": "clientes"},
+            "F4": {"text": "Gestão de Estoque", "frame_name": "estoque"},
+            "F5": {"text": "Abrir PDV e Histórico", "frame_name": "pdv"},
+            "F6": {"text": "Ver Vendas A Prazo", "frame_name": "aprazo"},
+            "F7": {"text": "Controle de Caixa", "frame_name": "caixa"},
+            "F8": {"text": "Ver Relatórios", "frame_name": "relatorios"}
+        }
 
-        for item in menu_items:
-            ttk.Button(self.menu_frame, text=item["text"], command=item["command"], width=25).pack(pady=8, padx=5)
+        for key, item_info in self.module_map.items():
+            btn = ttk.Button(self.menu_frame, text=f"{item_info['text']} ({key})", 
+                             command=lambda name=item_info['frame_name']: self.show_frame(name), 
+                             width=25)
+            btn.pack(pady=6, padx=5)
+            self.master.bind(f"<{key}>", lambda event, name=item_info['frame_name']: self.show_frame(name))
 
-        # --- Frame Principal para Conteúdo (onde as GUIs serão exibidas) ---
+        ttk.Button(self.menu_frame, text="Sair", command=master.quit, width=25).pack(pady=15, padx=5)
+
         self.content_frame = ttk.Frame(master)
         self.content_frame.pack(side="right", fill="both", expand=True, padx=10, pady=10)
 
-        # --- Criação das instâncias de cada GUI como Frames internos ---
         self.frames = {}
-        for F in (ProdutosGUI, VendedoresGUI, ClientesGUI, EstoqueGUI, PDVGUI, APrazoGUI, CaixaGUI, RelatoriosGUI): # Adicionado CaixaGUI
+        for F in (ProdutosGUI, VendedoresGUI, ClientesGUI, EstoqueGUI, PDVGUI, APrazoGUI, CaixaGUI, RelatoriosGUI):
             page_name = F.__name__.replace('GUI', '').lower()
-            frame = F(self.content_frame)
-            self.frames[page_name] = frame
-            frame.grid(row=0, column=0, sticky="nsew")
+            frame_instance = F(self.content_frame)
+            self.frames[page_name] = frame_instance
+            frame_instance.grid(row=0, column=0, sticky="nsew")
 
-        # Configura o grid do content_frame para que o frame ativo ocupe todo o espaço
         self.content_frame.grid_rowconfigure(0, weight=1)
         self.content_frame.grid_columnconfigure(0, weight=1)
         
-        # Mostra o frame inicial (PDV geralmente é o mais usado)
         self.show_frame("pdv")
 
     def show_frame(self, page_name):
         frame = self.frames[page_name]
         frame.tkraise()
+        self.master.title(f"Sistema Loja Streetwear - {page_name.capitalize()}")
 
-        # Recarrega dados específicos quando um módulo é ativado
-        if page_name == "pdv":
-            self.frames["pdv"]._load_vendedores_clientes_for_dropdowns()
-            self.frames["pdv"].load_vendas_historico()
-            self.frames["pdv"].sku_entry.focus_set()
-        elif page_name == "estoque":
-            self.frames["estoque"].load_produtos_for_dropdown()
-            self.frames["estoque"].load_estoque_atual()
-            self.frames["estoque"].load_historico_movimentacoes()
-        elif page_name == "aprazo":
-            self.frames["aprazo"]._load_clientes_for_filter()
-            self.frames["aprazo"].load_parcelas()
-        elif page_name == "caixa": # NOVO: Recarrega o caixa
-            self.frames["caixa"]._load_vendedores_for_dropdown()
-            self.frames["caixa"].load_movimentacoes_caixa()
-        elif page_name == "relatorios":
-            self.frames["relatorios"]._load_vendedores_clientes_for_filters()
-            self.frames["relatorios"].load_relatorio_vendas()
-        elif page_name == "clientes":
-            self.frames["clientes"].load_clientes()
-        elif page_name == "vendedores":
-            self.frames["vendedores"].load_vendedores()
-        elif page_name == "produtos":
-            self.frames["produtos"].load_products()
+        try:
+            if page_name == "pdv":
+                self.frames["pdv"]._load_vendedores_clientes_for_dropdowns()
+                self.frames["pdv"].load_vendas_historico()
+                self.frames["pdv"].sku_entry.focus_set()
+            elif page_name == "estoque":
+                self.frames["estoque"]._load_vendedores_for_dropdown()
+                self.frames["estoque"].load_produtos_for_dropdown()
+                self.frames["estoque"].load_estoque_atual()
+                self.frames["estoque"].load_historico_movimentacoes()
+            elif page_name == "aprazo":
+                self.frames["aprazo"]._load_clientes_for_filter()
+                self.frames["aprazo"].load_parcelas()
+            elif page_name == "caixa":
+                self.frames["caixa"]._load_vendedores_for_dropdown()
+                self.frames["caixa"].load_movimentacoes_caixa()
+            elif page_name == "relatorios":
+                self.frames["relatorios"]._load_vendedores_clientes_for_filters()
+                self.frames["relatorios"].load_relatorio_vendas()
+            elif page_name == "clientes":
+                self.frames["clientes"].load_clientes()
+            elif page_name == "vendedores":
+                self.frames["vendedores"].load_vendedores()
+            elif page_name == "produtos":
+                self.frames["produtos"].load_products()
+        except Exception as e:
+            print(f"Erro ao recarregar dados para {page_name}: {e}")
 
 
 if __name__ == "__main__":

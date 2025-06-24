@@ -19,6 +19,8 @@ class RelatoriosGUI(ttk.Frame):
         self.filter_tipo_cartao_var = tk.StringVar(value="Todos")
 
         # Listas de opções
+        self.vendedor_nomes_for_filter = ["Todos"]
+        self.cliente_nomes_for_filter = ["Todos"]
         self.filter_pagamento_options = ["Todos", "Dinheiro", "Cartao", "Pix", "A Prazo"]
         self.filter_tipo_cartao_options = ["Todos", "Crédito", "Débito", "N/A"]
 
@@ -42,6 +44,7 @@ class RelatoriosGUI(ttk.Frame):
         # Vendedores
         cursor.execute("SELECT id, nome FROM vendedores ORDER BY nome")
         vendedores_db = cursor.fetchall()
+        self.vendedores_dict = {"Todos": None}
         self.vendedor_nomes_for_filter = ["Todos"]
         for v in vendedores_db:
             self.vendedores_dict[v['nome']] = v['id']
@@ -59,6 +62,7 @@ class RelatoriosGUI(ttk.Frame):
         # Clientes
         cursor.execute("SELECT id, nome FROM clientes ORDER BY nome")
         clientes_db = cursor.fetchall()
+        self.clientes_dict = {"Todos": None}
         self.cliente_nomes_for_filter = ["Todos"]
         for c in clientes_db:
             self.clientes_dict[c['nome']] = c['id']
@@ -82,7 +86,7 @@ class RelatoriosGUI(ttk.Frame):
         filter_frame.columnconfigure(1, weight=1)
         filter_frame.columnconfigure(3, weight=1)
         filter_frame.columnconfigure(5, weight=1)
-        filter_frame.columnconfigure(7, weight=1) # Coluna extra para Tipo Cartão
+        filter_frame.columnconfigure(7, weight=1)
 
         # Data Início
         ttk.Label(filter_frame, text="Data Início:").grid(row=0, column=0, sticky="w", padx=5, pady=5)
@@ -96,13 +100,11 @@ class RelatoriosGUI(ttk.Frame):
 
         # Vendedor
         ttk.Label(filter_frame, text="Vendedor:").grid(row=0, column=4, sticky="w", padx=5, pady=5)
-        # self.vendedor_nomes_for_filter já existe do _load_vendedores_clientes_for_filters
         self.vendedor_menu = ttk.OptionMenu(filter_frame, self.filter_vendedor_var, self.vendedor_nomes_for_filter[0], *self.vendedor_nomes_for_filter)
         self.vendedor_menu.grid(row=0, column=5, sticky="ew", padx=5, pady=5)
 
         # Cliente
         ttk.Label(filter_frame, text="Cliente:").grid(row=0, column=6, sticky="w", padx=5, pady=5)
-        # self.cliente_nomes_for_filter já existe do _load_vendedores_clientes_for_filters
         self.cliente_menu = ttk.OptionMenu(filter_frame, self.filter_cliente_var, self.cliente_nomes_for_filter[0], *self.cliente_nomes_for_filter)
         self.cliente_menu.grid(row=0, column=7, sticky="ew", padx=5, pady=5)
 
@@ -148,7 +150,7 @@ class RelatoriosGUI(ttk.Frame):
         scrollbar.pack(side="right", fill="y")
         
         # Binding para clique direito para ver detalhes da venda
-        self.vendas_tree.bind("<Button-3>", self.on_right_click_tree) # Botão direito
+        self.vendas_tree.bind("<Button-3>", self.on_right_click_tree)
 
         # Frame de Totais Resumidos
         summary_frame = ttk.LabelFrame(self, text="Totais do Período", padding="10")
@@ -220,13 +222,11 @@ class RelatoriosGUI(ttk.Frame):
                 query += " AND v.vendedor_id = ?"
                 params.append(vendedor_id_filtro)
         if cliente_filtro_nome != "Todos":
-            # Para filtrar cliente, precisamos buscar o ID do cliente pelo nome
-            # Usamos uma nova conexão temporária aqui para evitar problemas de cursor
             temp_conn = self.get_db_connection()
             temp_cursor = temp_conn.cursor()
             temp_cursor.execute("SELECT id FROM clientes WHERE nome = ?", (cliente_filtro_nome,))
             cliente_id_filtro_row = temp_cursor.fetchone()
-            temp_conn.close() # Fechar a conexão temporária
+            temp_conn.close()
             
             if cliente_id_filtro_row:
                 cliente_id_filtro = cliente_id_filtro_row['id']
@@ -283,14 +283,12 @@ class RelatoriosGUI(ttk.Frame):
         self.total_final_label.config(text=f"TOTAL LÍQUIDO ARRECADADO: R$ {total_final_acumulado:.2f}")
 
     def on_right_click_tree(self, event):
-        # Seleciona o item clicado com o botão direito
-        item_id = self.vendas_tree.identify_row(event.y)
-        if not item_id:
+        selected_item_id = self.vendas_tree.identify_row(event.y)
+        if not selected_item_id:
             return
 
-        self.vendas_tree.selection_set(item_id) # Seleciona o item para que get_selection() funcione
+        self.vendas_tree.selection_set(selected_item_id)
         
-        # Cria o menu de contexto
         menu = tk.Menu(self.master, tearoff=0)
         menu.add_command(label="Ver Detalhes da Venda", command=self.show_venda_details_from_tree)
         menu.tk_popup(event.x_root, event.y_root)
@@ -303,13 +301,9 @@ class RelatoriosGUI(ttk.Frame):
         
         venda_id = self.vendas_tree.item(selected_item, 'values')[0]
 
-        # Reutiliza a lógica de show_venda_details do PDVGUI
-        # Para evitar circular import e manter a consistência, chamaremos a função auxiliar
-        self._show_sale_details_common(venda_id, self.master) # Passa o master (o frame atual do RelatóriosGUI) como parent_window para a messagebox
+        self._show_sale_details_common(venda_id, self.master)
 
     def _show_sale_details_common(self, sale_id, parent_window):
-        # Essa função é uma cópia da lógica de show_venda_details do PDVGUI
-        # Para evitar dependência circular e permitir reuso.
         conn = self.get_db_connection()
         cursor = conn.cursor()
 

@@ -1,13 +1,12 @@
 import sqlite3
 
-# CORREÇÃO: Variável DATABASE_NAME deve estar em maiúsculas
 DATABASE_NAME = 'loja_streetwear.db'
 
 def create_tables():
-    conn = sqlite3.connect(DATABASE_NAME) # CORREÇÃO: Usar DATABASE_NAME aqui também
+    conn = sqlite3.connect(DATABASE_NAME)
     cursor = conn.cursor()
 
-    # Tabela de Produtos (SEM ALTERAÇÃO)
+    # Tabela de Produtos (CORREÇÃO: Garantindo que SKU e estoque_minimo existam)
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS produtos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -18,8 +17,8 @@ def create_tables():
             preco_custo REAL NOT NULL,
             preco_venda REAL NOT NULL,
             quantidade INTEGER NOT NULL,
-            sku TEXT UNIQUE,
-            estoque_minimo INTEGER DEFAULT 0
+            sku TEXT UNIQUE, -- COLUNA 'SKU' CORRIGIDA/ADICIONADA
+            estoque_minimo INTEGER DEFAULT 0 -- COLUNA 'ESTOQUE_MINIMO' CORRIGIDA/ADICIONADA
         )
     ''')
 
@@ -33,19 +32,21 @@ def create_tables():
         )
     ''')
 
-    # Tabela de Clientes (SEM ALTERAÇÃO)
+    # Tabela de Clientes (CORREÇÃO FINALMENTE VERIFICADA)
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS clientes (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             nome TEXT NOT NULL,
+            cpf TEXT UNIQUE,
             telefone TEXT,
             email TEXT UNIQUE,
             data_nascimento TEXT,
-            pontos INTEGER DEFAULT 0
+            pontos INTEGER DEFAULT 0,
+            endereco TEXT
         )
     ''')
 
-    # Tabela de Vendas (SEM ALTERAÇÃO - já inclui juros_aplicados)
+    # Tabela de Vendas (SEM ALTERAÇÃO)
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS vendas (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -121,18 +122,18 @@ def create_tables():
         )
     ''')
 
-    # NOVA TABELA: Movimentações de Caixa
+    # Tabela de Movimentações de Caixa (CORREÇÃO FINALMENTE CONFIRMADA)
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS movimentacoes_caixa (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             data_hora TEXT NOT NULL,
-            tipo TEXT NOT NULL, -- 'Entrada', 'Saida', 'Abertura', 'Fechamento'
+            tipo_movimentacao TEXT NOT NULL,
             valor REAL NOT NULL,
-            forma_pagamento TEXT, -- Dinheiro, Cartao, Pix
+            forma_pagamento TEXT,
             descricao TEXT,
-            referencia_id INTEGER, -- ID da venda, parcela, etc.
-            tabela_referencia TEXT, -- 'vendas', 'parcelas', etc.
-            responsavel_id INTEGER, -- Vendedor que registrou a movimentação
+            referencia_id INTEGER,
+            tabela_referencia TEXT,
+            responsavel_id INTEGER,
             FOREIGN KEY (responsavel_id) REFERENCES vendedores(id)
         )
     ''')

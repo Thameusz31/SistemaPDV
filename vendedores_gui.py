@@ -3,18 +3,13 @@ from tkinter import ttk, messagebox
 import sqlite3
 from database import DATABASE_NAME
 
-# A CLASSE AGORA HERDA DE ttk.Frame
 class VendedoresGUI(ttk.Frame):
-    def __init__(self, master): # 'master' é o frame pai que vem do MainApp
-        # CHAMA O CONSTRUTOR DA CLASSE PAI (ttk.Frame)
-        super().__init__(master, padding="15") # <--- ALTERAÇÃO AQUI
-        self.master = master # Mantém a referência ao frame pai se precisar
-
-        # REMOVER: master.title(...), master.geometry(...), etc.
+    def __init__(self, master):
+        super().__init__(master, padding="15")
+        self.master = master
 
         self.conn = self.get_db_connection()
 
-        # Agora, os LabelFrames e outros widgets são pack/grid DIRETAMENTE NESTE self
         self.frame_form = ttk.LabelFrame(self, text="Cadastro/Edição de Vendedor", padding="15")
         self.frame_form.pack(pady=10, padx=10, fill="x")
         self.frame_form.columnconfigure(1, weight=1)
@@ -36,7 +31,7 @@ class VendedoresGUI(ttk.Frame):
         labels = ["Nome:", "CPF:", "Telefone:"]
         self.entries = {}
         for i, label_text in enumerate(labels):
-            ttk.Label(parent_frame, text=label_text).grid(row=i, column=0, sticky="w", pady=4, padx=5)
+            ttk.Label(parent_frame, text=label_text).grid(row=i, column=0, sticky="w", pady=4, padx=5) # REMOVIDO background='white'
             entry = ttk.Entry(parent_frame, width=40)
             entry.grid(row=i, column=1, sticky="ew", pady=4, padx=5)
             self.entries[label_text.replace(":", "").lower()] = entry
@@ -135,8 +130,7 @@ class VendedoresGUI(ttk.Frame):
         for entry in self.entries.values():
             entry.delete(0, tk.END)
         self.vendedor_id_to_edit = None
-        # Mudei de master.title para self.master.master.title pois self é o frame, master é o content_frame e master.master é a janela principal
-        self.master.master.title("Gerenciamento de Vendedores - Loja Streetwear")
+        self.winfo_toplevel().title("Sistema Loja Streetwear - Gestão Integrada")
         self.frame_form.config(text="Cadastro/Edição de Vendedor")
         
     def edit_selected_vendedor(self):
@@ -161,7 +155,7 @@ class VendedoresGUI(ttk.Frame):
             self.entries["telefone"].insert(0, vendedor_data['telefone'] if vendedor_data['telefone'] else "")
             
             self.vendedor_id_to_edit = vendedor_id
-            self.master.master.title(f"Editando Vendedor: {vendedor_data['nome']}")
+            self.winfo_toplevel().title(f"Sistema Loja Streetwear - Editando Vendedor: {vendedor_data['nome']}")
             self.frame_form.config(text=f"Editando Vendedor: {vendedor_data['nome']}")
 
     def delete_selected_vendedor(self):

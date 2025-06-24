@@ -2,6 +2,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 import sqlite3
 from database import DATABASE_NAME
+from datetime import datetime, timedelta # Importar timedelta, embora não usado diretamente aqui, é bom para contexto
 
 class ClientesGUI(ttk.Frame):
     def __init__(self, master):
@@ -28,24 +29,32 @@ class ClientesGUI(ttk.Frame):
         return conn
 
     def create_form_widgets(self, parent_frame):
+        # CORREÇÃO: Adicionando 'data_nascimento' e 'pontos' nos campos
         field_configs = [
             ("Nome:", "nome"),
+            ("CPF:", "cpf"),        # COLUNA ESPERADA
             ("Telefone:", "telefone"),
             ("Email:", "email"),
-            ("Data Nasc. (AAAA-MM-DD):", "data_nascimento"),
-            ("Pontos:", "pontos")
+            ("Data Nasc. (AAAA-MM-DD):", "data_nascimento"), # COLUNA ESPERADA
+            ("Pontos:", "pontos"),   # COLUNA ESPERADA
+            ("Endereço:", "endereco") # COLUNA ESPERADA
         ]
         
         self.entries = {}
         for i, (label_text, key_name) in enumerate(field_configs):
-            ttk.Label(parent_frame, text=label_text).grid(row=i, column=0, sticky="w", pady=4, padx=5)
+            ttk.Label(parent_frame, text=label_text, background='white').grid(row=i, column=0, sticky="w", pady=4, padx=5)
             entry = ttk.Entry(parent_frame, width=40)
             entry.grid(row=i, column=1, sticky="ew", pady=4, padx=5)
             self.entries[key_name] = entry
         
         # --- Configuração das máscaras ---
-        self.entries["telefone"].bind("<KeyRelease>", lambda event: self.format_phone(self.entries["telefone"]))
-        self.entries["data_nascimento"].bind("<KeyRelease>", lambda event: self.format_date(self.entries["data_nascimento"]))
+        # Certifique-se de que os campos existam antes de bindar
+        if "cpf" in self.entries:
+            self.entries["cpf"].bind("<KeyRelease>", lambda event: self.format_cpf(self.entries["cpf"]))
+        if "telefone" in self.entries:
+            self.entries["telefone"].bind("<KeyRelease>", lambda event: self.format_phone(self.entries["telefone"]))
+        if "data_nascimento" in self.entries:
+            self.entries["data_nascimento"].bind("<KeyRelease>", lambda event: self.format_date(self.entries["data_nascimento"]))
 
 
         button_frame = ttk.Frame(parent_frame)
@@ -57,7 +66,8 @@ class ClientesGUI(ttk.Frame):
         self.cliente_id_to_edit = None
 
     def create_list_widgets(self, parent_frame):
-        columns = ("ID", "Nome", "Telefone", "Email", "Data Nasc.", "Pontos")
+        # CORREÇÃO: Adicionando 'Pontos' e 'Endereço' às colunas da Treeview
+        columns = ("ID", "Nome", "CPF", "Telefone", "Email", "Data Nasc.", "Pontos", "Endereço")
         self.tree = ttk.Treeview(parent_frame, columns=columns, show="headings", selectmode="browse")
 
         for col in columns:
@@ -66,14 +76,18 @@ class ClientesGUI(ttk.Frame):
                 self.tree.column(col, width=50, anchor="center")
             elif col == "Nome":
                 self.tree.column(col, width=150, anchor="w")
+            elif col == "CPF":
+                self.tree.column(col, width=120, anchor="center")
             elif col == "Telefone":
                 self.tree.column(col, width=120, anchor="center")
             elif col == "Email":
                 self.tree.column(col, width=150, anchor="w")
             elif col == "Data Nasc.":
                 self.tree.column(col, width=100, anchor="center")
-            elif col == "Pontos":
+            elif col == "Pontos": # CORREÇÃO: Coluna Pontos
                 self.tree.column(col, width=70, anchor="center")
+            elif col == "Endereço": # CORREÇÃO: Coluna Endereço
+                self.tree.column(col, width=200, anchor="w")
             else:
                 self.tree.column(col, width=80, anchor="center")
 
@@ -96,19 +110,22 @@ class ClientesGUI(ttk.Frame):
 
         conn = self.get_db_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT id, nome, telefone, email, data_nascimento, pontos FROM clientes ORDER BY nome")
+        # CORREÇÃO: Selecionar todas as colunas que são usadas, incluindo cpf, data_nascimento, pontos e endereco
+        cursor.execute("SELECT id, nome, cpf, telefone, email, data_nascimento, pontos, endereco FROM clientes ORDER BY nome")
         clientes = cursor.fetchall()
         conn.close()
 
         for c in clientes:
-            self.tree.insert("", "end", values=(c['id'], c['nome'], c['telefone'], c['email'], c['data_nascimento'], c['pontos']))
+            self.tree.insert("", "end", values=(c['id'], c['nome'], c['cpf'], c['telefone'], c['email'], c['data_nascimento'], c['pontos'], c['endereco']))
 
     def add_cliente(self):
         nome = self.entries["nome"].get().strip()
+        cpf = self.entries["cpf"].get().strip()
         telefone = self.entries["telefone"].get().strip()
         email = self.entries["email"].get().strip()
         data_nascimento = self.entries["data_nascimento"].get().strip()
         pontos_str = self.entries["pontos"].get().strip()
+        endereco = self.entries["endereco"].get().strip() # NOVO: Pega o endereço
 
         if not nome:
             messagebox.showerror("Erro de Validação", "Nome do cliente é obrigatório.")
@@ -128,13 +145,13 @@ class ClientesGUI(ttk.Frame):
             if self.cliente_id_to_edit:
                 cursor.execute("""
                     UPDATE clientes SET
-                    nome = ?, telefone = ?, email = ?, data_nascimento = ?, pontos = ?
+                    nome = ?, cpf = ?, telefone = ?, email = ?, data_nascimento = ?, pontos = ?, endereco = ?
                     WHERE id = ?
-                """, (nome, telefone, email, data_nascimento, pontos, self.cliente_id_to_edit))
+                """, (nome, cpf, telefone, email, data_nascimento, pontos, endereco, self.cliente_id_to_edit)) # CORREÇÃO: Adicionado endereco
                 messagebox.showinfo("Sucesso", "Cliente atualizado com sucesso!")
             else:
-                cursor.execute("INSERT INTO clientes (nome, telefone, email, data_nascimento, pontos) VALUES (?, ?, ?, ?, ?)",
-                               (nome, telefone, email, data_nascimento, pontos))
+                cursor.execute("INSERT INTO clientes (nome, cpf, telefone, email, data_nascimento, pontos, endereco) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                               (nome, cpf, telefone, email, data_nascimento, pontos, endereco)) # CORREÇÃO: Adicionado endereco
                 messagebox.showinfo("Sucesso", f"Cliente '{nome}' cadastrado com sucesso!")
             
             conn.commit()
@@ -144,6 +161,8 @@ class ClientesGUI(ttk.Frame):
         except sqlite3.IntegrityError as e:
             if "UNIQUE constraint failed: clientes.email" in str(e):
                 messagebox.showerror("Erro", f"Erro: Já existe um cliente com o e-mail '{email}'.")
+            elif "UNIQUE constraint failed: clientes.cpf" in str(e):
+                messagebox.showerror("Erro", f"Erro: Já existe um cliente com o CPF '{cpf}'.")
             else:
                 messagebox.showerror("Erro", f"Erro ao salvar cliente: {e}")
         except Exception as e:
@@ -156,7 +175,7 @@ class ClientesGUI(ttk.Frame):
             entry.delete(0, tk.END)
         self.entries["pontos"].insert(0, "0")
         self.cliente_id_to_edit = None
-        self.winfo_toplevel().title("Sistema Loja Streetwear - Gestão Integrada") # Correção winfo_toplevel()
+        self.winfo_toplevel().title("Sistema Loja Streetwear - Gestão Integrada")
         self.frame_form.config(text="Cadastro/Edição de Cliente")
         
     def edit_selected_cliente(self):
@@ -177,13 +196,15 @@ class ClientesGUI(ttk.Frame):
         if cliente_data:
             self.clear_form()
             self.entries["nome"].insert(0, cliente_data['nome'])
+            self.entries["cpf"].insert(0, cliente_data['cpf'] if cliente_data['cpf'] else "")
             self.entries["telefone"].insert(0, cliente_data['telefone'] if cliente_data['telefone'] else "")
             self.entries["email"].insert(0, cliente_data['email'] if cliente_data['email'] else "")
             self.entries["data_nascimento"].insert(0, cliente_data['data_nascimento'] if cliente_data['data_nascimento'] else "")
             self.entries["pontos"].insert(0, str(cliente_data['pontos']))
+            self.entries["endereco"].insert(0, cliente_data['endereco'] if cliente_data['endereco'] else "")
             
             self.cliente_id_to_edit = cliente_id
-            self.winfo_toplevel().title(f"Sistema Loja Streetwear - Editando Cliente: {cliente_data['nome']}") # Correção winfo_toplevel()
+            self.winfo_toplevel().title(f"Sistema Loja Streetwear - Editando Cliente: {cliente_data['nome']}")
             self.frame_form.config(text=f"Editando Cliente: {cliente_data['nome']}")
 
     def delete_selected_cliente(self):
@@ -245,15 +266,15 @@ class ClientesGUI(ttk.Frame):
         conn.close()
 
         if not vendas:
-            messagebox.showinfo("Histórico de Compras", f"O cliente '{cliente_nome}' não possui histórico de compras registrado.", parent=self.winfo_toplevel()) # Correção winfo_toplevel()
+            messagebox.showinfo("Histórico de Compras", f"O cliente '{cliente_nome}' não possui histórico de compras registrado.", parent=self.winfo_toplevel())
             return
 
-        history_window = tk.Toplevel(self.winfo_toplevel()) # Correção winfo_toplevel()
+        history_window = tk.Toplevel(self.winfo_toplevel())
         history_window.title(f"Histórico de Compras de {cliente_nome}")
         history_window.geometry("950x550")
         history_window.grab_set()
 
-        ttk.Label(history_window, text=f"Histórico de Compras de: {cliente_nome}", font=("Arial", 14, "bold")).pack(pady=10)
+        ttk.Label(history_window, text=f"Histórico de Compras de: {cliente_nome}", font=("Arial", 14, "bold"), background='white').pack(pady=10)
 
         columns = ("ID Venda", "Data/Hora", "Total Bruto", "Desconto", "Juros", "Pontos Utilizados", "Total Final", "Forma Pgto", "Tipo Cartão", "Parcelas", "Vendedor")
         history_tree = ttk.Treeview(history_window, columns=columns, show="headings", selectmode="browse")
@@ -294,7 +315,7 @@ class ClientesGUI(ttk.Frame):
                 venda['data_hora'],
                 f"{venda['total_venda']:.2f}",
                 f"{venda['desconto_aplicado']:.2f}",
-                f"{venda['juros_aplicados']:.2f}", # Incluído Juros
+                f"{venda['juros_aplicados']:.2f}",
                 pontos_utilizados_exibicao,
                 f"{venda['total_final']:.2f}",
                 venda['forma_pagamento'],
@@ -310,12 +331,11 @@ class ClientesGUI(ttk.Frame):
                 return
             sale_id = history_tree.item(selected_sale_item, 'values')[0]
             
-            self._show_sale_details_from_id(sale_id, history_window)
+            self._show_sale_details_common(sale_id, history_window)
 
         ttk.Button(history_window, text="Ver Detalhes da Venda Selecionada", command=view_selected_sale_details).pack(pady=5)
 
-    # Função auxiliar para mostrar detalhes da venda (adaptada para ser reutilizada)
-    def _show_sale_details_from_id(self, sale_id, parent_window):
+    def _show_sale_details_common(self, sale_id, parent_window):
         conn = self.get_db_connection()
         cursor = conn.cursor()
 

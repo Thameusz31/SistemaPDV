@@ -13,7 +13,7 @@ class PDVGUI(ttk.Frame):
         self.master = master
 
         self.conn = self.get_db_connection()
-        self.carrinho = []
+        self.carrinho = {}
         self.total_venda = 0.0
         self.desconto_aplicado = 0.0
         self.juros_aplicados = 0.0
@@ -75,15 +75,11 @@ class PDVGUI(ttk.Frame):
         self.canvas_venda.pack(side="left", fill="both", expand=True)
         self.scrollbar_venda.pack(side="right", fill="y")
         
-        # --- NOVO: Ligar evento de roda do mouse para rolagem ---
-        self.canvas_venda.bind_all("<MouseWheel>", self._on_mouse_wheel) # Para Windows/Linux
-        # Para macOS, você pode precisar de <Button-4> (rolar para cima) e <Button-5> (rolar para baixo)
-        # self.canvas_venda.bind_all("<Button-4>", self._on_mouse_wheel)
-        # self.canvas_venda.bind_all("<Button-5>", self._on_mouse_wheel)
+        self.canvas_venda.bind_all("<MouseWheel>", self._on_mouse_wheel)
 
 
         # --- Sub-frames da Aba Nova Venda (AGORA DENTRO DE scrollable_frame_venda) ---
-        self.frame_vendedor_cliente = ttk.LabelFrame(self.scrollable_frame_venda, text="Vendedor e Cliente", padding="5 10")
+        self.frame_vendedor_cliente = ttk.LabelFrame(self.scrollable_frame_venda, text="Vendedor e Cliente", padding="5 10") 
         self.frame_vendedor_cliente.pack(pady=5, padx=5, fill="x")
         self.frame_vendedor_cliente.columnconfigure(1, weight=1)
 
@@ -137,12 +133,12 @@ class PDVGUI(ttk.Frame):
         self.create_total_pagamento_widgets(self.frame_total_pagamento)
         self.create_historico_widgets(self.frame_historico_tab)
         
-        # Recarregar dados após a criação de todos os widgets
+        # CORREÇÃO: Mover a chamada _load_vendedores_clientes_for_dropdowns() para após a criação de todos os widgets,
+        # incluindo os labels de pontos, etc., que ela tenta configurar.
         self._load_vendedores_clientes_for_dropdowns() 
         self.load_vendas_historico()
 
-    def _on_mouse_wheel(self, event): # NOVO MÉTODO
-        # Role a tela com base na direção da roda do mouse
+    def _on_mouse_wheel(self, event):
         self.canvas_venda.yview_scroll(int(-1*(event.delta/120)), "units")
 
     def get_db_connection(self):
@@ -151,7 +147,6 @@ class PDVGUI(ttk.Frame):
         return conn
     
     def _load_vendedores_clientes_for_dropdowns(self):
-        # Carrega Vendedores
         self.vendedores_dict = {}
         vendedor_nomes_for_sale = ["-- Selecione --"]
         vendedor_nomes_for_filter = ["Todos"]
@@ -172,7 +167,6 @@ class PDVGUI(ttk.Frame):
             menu_venda.add_command(label=nome, command=tk._setit(self.selected_vendedor_var, nome))
         self.selected_vendedor_var.set(vendedor_nomes_for_sale[0])
 
-        # Recarrega as opções do menu de filtro do vendedor
         if hasattr(self, 'filter_vendedor_menu') and self.filter_vendedor_menu is not None:
             menu_filter_vendedor = self.filter_vendedor_menu["menu"]
             menu_filter_vendedor.delete(0, "end")
@@ -181,7 +175,6 @@ class PDVGUI(ttk.Frame):
             self.filter_vendedor_var.set(vendedor_nomes_for_filter[0])
 
 
-        # Carrega Clientes (com pontos)
         self.clientes_dict = {}
         self.clientes_pontos_dict = {}
         cliente_nomes_for_sale = ["-- Selecione --"]
@@ -204,7 +197,6 @@ class PDVGUI(ttk.Frame):
             menu_cliente.add_command(label=nome, command=tk._setit(self.selected_cliente_var, nome, self.update_pontos_display))
         self.selected_cliente_var.set(cliente_nomes_for_sale[0])
 
-        # Recarrega as opções do menu de filtro do cliente
         if hasattr(self, 'filter_cliente_menu') and self.filter_cliente_menu is not None:
             menu_filter_cliente = self.filter_cliente_menu["menu"]
             menu_filter_cliente.delete(0, "end")
@@ -212,9 +204,15 @@ class PDVGUI(ttk.Frame):
                 menu_filter_cliente.add_command(label=nome, command=tk._setit(self.filter_cliente_var, nome))
             self.filter_cliente_var.set(cliente_nomes_for_filter[0])
 
-        self.update_pontos_display()
+        # CORREÇÃO: Verifica se os labels existem antes de configurar, para robustez
+        if hasattr(self, 'pontos_disponiveis_label'): # Verifica se o label já foi criado
+            self.update_pontos_display()
 
     def update_pontos_display(self, *args):
+        # Adicionado verificação para garantir que os widgets existam
+        if not hasattr(self, 'pontos_disponiveis_label') or self.pontos_disponiveis_label is None:
+            return # Sai da função se o widget ainda não foi criado
+
         selected_client_display = self.selected_cliente_var.get()
         if selected_client_display == "-- Selecione --":
             self.pontos_disponiveis_label.config(text="Pontos do Cliente: N/A")
@@ -229,12 +227,10 @@ class PDVGUI(ttk.Frame):
             self.apply_points_discount_button.config(state=tk.NORMAL)
 
     def create_vendedor_cliente_selection(self, parent_frame):
-        # Seleção de Vendedor
         ttk.Label(parent_frame, text="Vendedor:").grid(row=0, column=0, sticky="w", pady=5, padx=5)
         self.vendedor_dropdown.grid(row=0, column=1, sticky="ew", pady=5, padx=5)
         ttk.Button(parent_frame, text="Novo", command=lambda: messagebox.showinfo("Info", "Crie vendedores na aba de Gerenciar Vendedores.")).grid(row=0, column=2, padx=5)
 
-        # Seleção de Cliente
         ttk.Label(parent_frame, text="Cliente:").grid(row=1, column=0, sticky="w", pady=5, padx=5)
         self.cliente_dropdown.grid(row=1, column=1, sticky="ew", pady=5, padx=5)
         
@@ -350,12 +346,10 @@ class PDVGUI(ttk.Frame):
         self.desconto_entry.grid(row=1, column=1, sticky="ew", padx=5, pady=2)
         self.desconto_entry_var.set("0.00")
         self.desconto_entry.bind("<KeyRelease>", lambda event=None: self.update_total_with_discount())
-        self.desconto_entry.bind("<FocusOut>", lambda event=None: self.fill_default_if_empty(self.desconto_entry_var, "0.00")) # NOVO
+        self.desconto_entry.bind("<FocusOut>", lambda event=None: self.fill_default_if_empty(self.desconto_entry_var, "0.00"))
 
-        self.desconto_aplicado_label = ttk.Label(parent_frame, text="Desconto Aplicado: R$ 0.00", font=("Arial", 10))
-        self.desconto_aplicado_label.grid(row=1, column=2, columnspan=2, sticky="w", padx=5, pady=2)
+        self.desconto_aplicado_label = ttk.Label(parent_frame, text="Desconto Aplicado: R$ 0.00", font=("Arial", 10)).grid(row=1, column=2, columnspan=2, sticky="w", padx=5, pady=2)
 
-        # Adição dos Widgets de Juros
         ttk.Label(parent_frame, text="Tipo de Juros:").grid(row=3, column=0, sticky="w", padx=5, pady=2)
         self.juros_tipo_var = tk.StringVar(value="Percentual")
         ttk.Radiobutton(parent_frame, text="%", value="Percentual", variable=self.juros_tipo_var, command=self.update_total_with_discount).grid(row=3, column=1, sticky="w", padx=5, pady=2)
@@ -366,17 +360,15 @@ class PDVGUI(ttk.Frame):
         self.juros_entry.grid(row=4, column=1, sticky="ew", padx=5, pady=2)
         self.juros_entry_var.set("0.00")
         self.juros_entry.bind("<KeyRelease>", lambda event=None: self.update_total_with_discount())
-        self.juros_entry.bind("<FocusOut>", lambda event=None: self.fill_default_if_empty(self.juros_entry_var, "0.00")) # NOVO
+        self.juros_entry.bind("<FocusOut>", lambda event=None: self.fill_default_if_empty(self.juros_entry_var, "0.00"))
 
-        self.juros_aplicados_label = ttk.Label(parent_frame, text="Juros Aplicados: R$ 0.00", font=("Arial", 10))
-        self.juros_aplicados_label.grid(row=4, column=2, columnspan=2, sticky="w", padx=5, pady=2)
+        self.juros_aplicados_label = ttk.Label(parent_frame, text="Juros Aplicados: R$ 0.00", font=("Arial", 10)).grid(row=4, column=2, columnspan=2, sticky="w", padx=5, pady=2)
 
 
         ttk.Separator(parent_frame, orient="horizontal").grid(row=5, column=0, columnspan=4, sticky="ew", pady=5)
 
         ttk.Label(parent_frame, text="Pontos Disponíveis:").grid(row=6, column=0, sticky="w", padx=5, pady=2)
-        self.pontos_disponiveis_label = ttk.Label(parent_frame, text="Pontos do Cliente: N/A", font=("Arial", 10, "bold"), foreground="blue")
-        self.pontos_disponiveis_label.grid(row=6, column=1, sticky="w", padx=5, pady=2)
+        self.pontos_disponiveis_label = ttk.Label(parent_frame, text="Pontos do Cliente: N/A", font=("Arial", 10, "bold"), foreground="blue").grid(row=6, column=1, sticky="w", padx=5, pady=2)
 
         ttk.Label(parent_frame, text="Pontos para Utilizar:").grid(row=7, column=0, sticky="w", padx=5, pady=2)
         self.pontos_utilizar_entry = ttk.Entry(parent_frame, width=15)
@@ -384,66 +376,54 @@ class PDVGUI(ttk.Frame):
         self.pontos_utilizar_entry.insert(0, "0")
         self.pontos_utilizar_entry.bind("<KeyRelease>", lambda event=None: self.calculate_points_redeem_value())
 
-        self.utilizar_valor_label = ttk.Label(parent_frame, text="Valor Utilizado: R$ 0.00", font=("Arial", 10))
-        self.utilizar_valor_label.grid(row=7, column=2, sticky="w", padx=5, pady=2)
+        self.utilizar_valor_label = ttk.Label(parent_frame, text="Valor Utilizado: R$ 0.00", font=("Arial", 10)).grid(row=7, column=2, sticky="w", padx=5, pady=2)
 
         self.apply_points_discount_button = ttk.Button(parent_frame, text="Aplicar Utilização de Pontos", command=self.apply_points_discount, style='Accent.TButton')
         self.apply_points_discount_button.grid(row=8, column=0, columnspan=4, pady=5)
         self.apply_points_discount_button.config(state=tk.DISABLED)
 
-    def fill_default_if_empty(self, string_var, default_value): # NOVO MÉTODO
+    def fill_default_if_empty(self, string_var, default_value):
         if not string_var.get().strip():
             string_var.set(default_value)
             self.update_total_with_discount()
 
 
     def create_total_pagamento_widgets(self, parent_frame):
-        # Frame para os Labels de total
         total_labels_frame = ttk.Frame(parent_frame)
         total_labels_frame.grid(row=0, column=0, rowspan=2, sticky="nsew", padx=5, pady=5)
         total_labels_frame.columnconfigure(0, weight=1)
 
-        self.total_bruto_label = ttk.Label(total_labels_frame, text=f"Total Bruto: R$ {self.total_venda:.2f}", font=("Arial", 14, "bold"))
-        self.total_bruto_label.pack(anchor="w", pady=2)
+        self.total_bruto_label = ttk.Label(total_labels_frame, text=f"Total Bruto: R$ {self.total_venda:.2f}", font=("Arial", 14, "bold")).pack(anchor="w", pady=2)
 
-        self.total_final_label = ttk.Label(total_labels_frame, text=f"TOTAL A PAGAR: R$ {self.total_final_com_desconto:.2f}", font=("Arial", 20, "bold"), foreground="green")
-        self.total_final_label.pack(anchor="w", pady=5)
+        self.total_final_label = ttk.Label(total_labels_frame, text=f"TOTAL A PAGAR: R$ {self.total_final_com_desconto:.2f}", font=("Arial", 20, "bold"), foreground="green").pack(anchor="w", pady=5)
 
-        # Frame para opções de pagamento
         payment_options_frame = ttk.Frame(parent_frame)
         payment_options_frame.grid(row=0, column=1, rowspan=2, sticky="nsew", padx=5, pady=5)
         payment_options_frame.columnconfigure(0, weight=1)
 
-        # Forma de Pagamento
         ttk.Label(payment_options_frame, text="Forma de Pagamento:").grid(row=0, column=0, sticky="w", padx=5, pady=2)
         self.forma_pagamento_var.trace_add("write", self.toggle_payment_options_visibility)
-        # self.forma_pagamento_options já foram definidas no __init__
         self.forma_pagamento_menu = ttk.OptionMenu(payment_options_frame, self.forma_pagamento_var, self.forma_pagamento_options[0], *self.forma_pagamento_options)
         self.forma_pagamento_menu.grid(row=1, column=0, sticky="ew", padx=5, pady=2)
 
-        # Tipo de Cartão (criados aqui e referenciados por self.)
         self.tipo_cartao_label = ttk.Label(payment_options_frame, text="Tipo Cartão:")
         self.tipo_cartao_var = tk.StringVar(value="Crédito")
-        # self.tipo_cartao_options já foram definidas no __init__
         self.tipo_cartao_menu = ttk.OptionMenu(payment_options_frame, self.tipo_cartao_var, self.tipo_cartao_options[0], *self.tipo_cartao_options)
 
-        # Parcelamento (criados aqui e referenciados por self.)
-        self.parcelas_label = ttk.Label(payment_options_frame, text="Parcelas:")
+        self.parcelas_label = ttk.Label(payment_options_frame, text="Parcelas:").grid(row=2, column=0, sticky="w", padx=5, pady=2)
         self.parcelas_options = ["1x", "2x", "3x"]
         self.parcelas_menu = ttk.OptionMenu(payment_options_frame, self.parcelas_var, self.parcelas_options[0], *self.parcelas_options)
 
-        # Botão Finalizar Venda
         ttk.Button(payment_options_frame, text="Finalizar Venda", command=self.finalize_sale, style='Accent.TButton').grid(row=4, column=0, sticky="ew", padx=5, pady=10)
 
 
     def toggle_payment_options_visibility(self, *args):
-        # Esconde todos os campos primeiro
         self.tipo_cartao_label.grid_forget()
         self.tipo_cartao_menu.grid_forget()
         self.parcelas_label.grid_forget()
         self.parcelas_menu.grid_forget()
         
-        self.parcelas_var.set("1x") # Reseta para 1x por padrão
+        self.parcelas_var.set("1x")
 
         forma_pagamento_selecionada = self.forma_pagamento_var.get()
         if forma_pagamento_selecionada == "Cartao":
@@ -458,12 +438,10 @@ class PDVGUI(ttk.Frame):
 
 
     def create_historico_widgets(self, parent_frame):
-        # Cria um sub-frame para os controles de filtro que usará GRID
         filter_controls_frame = ttk.Frame(parent_frame, padding="5")
         filter_controls_frame.pack(pady=5, fill="x")
 
-        # Configura as colunas do filter_controls_frame para usar grid
-        for i in range(8): # Ajusta para caber mais filtros em largura
+        for i in range(8):
             filter_controls_frame.columnconfigure(i, weight=1)
         
         ttk.Label(filter_controls_frame, text="De:").grid(row=0, column=0, sticky="w", padx=2, pady=2)
@@ -474,37 +452,32 @@ class PDVGUI(ttk.Frame):
         ttk.Label(filter_controls_frame, text="Até:").grid(row=0, column=2, sticky="w", padx=2, pady=2)
         self.data_fim_entry = ttk.Entry(filter_controls_frame, width=12)
         self.data_fim_entry.grid(row=0, column=3, sticky="ew", padx=2, pady=2)
-        self.data_fim_entry.insert(0, (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")) # Termina amanhã para incluir hoje
+        self.data_fim_entry.insert(0, (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d"))
 
         ttk.Label(filter_controls_frame, text="Pagamento:").grid(row=1, column=0, sticky="w", padx=5, pady=2)
-        # self.filter_pagamento_var já inicializado no __init__
         self.filter_pagamento_menu = ttk.OptionMenu(filter_controls_frame, self.filter_pagamento_var, self.filter_pagamento_options[0], *self.filter_pagamento_options)
         self.filter_pagamento_menu.grid(row=1, column=1, sticky="ew", padx=2, pady=2)
 
         ttk.Label(filter_controls_frame, text="Tipo Cartão:").grid(row=0, column=4, sticky="w", padx=5, pady=5)
-        # self.filter_tipo_cartao_var já inicializado no __init__
         self.filter_tipo_cartao_menu = ttk.OptionMenu(filter_controls_frame, self.filter_tipo_cartao_var, self.filter_tipo_cartao_options[0], *self.filter_tipo_cartao_options)
         self.filter_tipo_cartao_menu.grid(row=0, column=5, sticky="ew", padx=5, pady=5)
 
         ttk.Label(filter_controls_frame, text="Vendedor:").grid(row=2, column=0, sticky="w", padx=5, pady=2)
-        # self.filter_vendedor_var já inicializado no __init__
-        self.filter_vendedor_menu = ttk.OptionMenu(filter_controls_frame, self.filter_vendedor_var, "Todos") # Reatribui aqui para ser filho do filter_controls_frame
+        self.filter_vendedor_menu = ttk.OptionMenu(filter_controls_frame, self.filter_vendedor_var, "Todos")
         self.filter_vendedor_menu.grid(row=2, column=1, sticky="ew", padx=2, pady=2)
 
         ttk.Label(filter_controls_frame, text="Cliente:").grid(row=2, column=2, sticky="w", padx=5, pady=2)
-        # self.filter_cliente_var já inicializado no __init__
-        self.filter_cliente_menu = ttk.OptionMenu(filter_controls_frame, self.filter_cliente_var, "Todos") # Reatribui aqui para ser filho do filter_controls_frame
+        self.filter_cliente_menu = ttk.OptionMenu(filter_controls_frame, self.filter_cliente_var, "Todos")
         self.filter_cliente_menu.grid(row=2, column=3, sticky="ew", padx=2, pady=2)
 
         ttk.Label(filter_controls_frame, text="Status Parcela:").grid(row=1, column=6, sticky="w", padx=5, pady=2)
-        # self.filter_status_parcela_var já inicializado no __init__
         self.filter_status_parcela_menu = ttk.OptionMenu(filter_controls_frame, self.filter_status_parcela_var, self.filter_status_parcela_options[0], *self.filter_status_parcela_options)
         self.filter_status_parcela_menu.grid(row=1, column=7, sticky="ew", padx=2, pady=2)
 
 
         ttk.Button(filter_controls_frame, text="Filtrar", command=self.load_vendas_historico).grid(row=2, column=4, columnspan=4, padx=10, sticky="ew")
 
-        # Treeview para o histórico (ainda filho de parent_frame, que é frame_historico_tab)
+        ttk.Label(parent_frame, text="Histórico de Vendas:", font=("Arial", 11, "bold")).pack(pady=5, fill="x")
         columns_hist = ("ID Venda", "Data/Hora", "Total", "Desconto", "Juros", "Pontos Utilizados", "Total Final", "Forma Pgto", "Tipo Cartão", "Parcelas", "Vendedor", "Cliente")
         self.historico_tree = ttk.Treeview(parent_frame, columns=columns_hist, show="headings", selectmode="browse")
 
@@ -573,13 +546,13 @@ class PDVGUI(ttk.Frame):
                 break
         
         if not found_in_cart:
-            self.carrinho.append({
-                'product_id': produto['id'],
-                'sku': sku,
+            self.carrinho[produto['id']] = {
+                'sku': produto['sku'],
                 'nome': produto['nome'],
                 'quantidade': quantidade,
-                'preco_unitario': produto['preco_venda']
-            })
+                'preco_unitario': produto['preco_venda'],
+                'subtotal': quantidade * produto['preco_venda']
+            }
         
         self.update_cart_display()
         self.sku_entry.delete(0, tk.END)
@@ -592,15 +565,19 @@ class PDVGUI(ttk.Frame):
             self.cart_tree.delete(item)
         
         self.total_venda = 0.0
-        for item in self.carrinho:
-            subtotal = item['quantidade'] * item['preco_unitario']
-            self.cart_tree.insert("", "end", values=(item['sku'], item['nome'], item['quantidade'], f"{item['preco_unitario']:.2f}", f"{subtotal:.2f}"))
-            self.total_venda += subtotal
+        for produto_id, item_data in self.carrinho.items():
+            self.cart_tree.insert("", "end", values=(
+                item_data['sku'],
+                item_data['nome'],
+                item_data['quantidade'],
+                f"R$ {item_data['preco_unitario']:.2f}",
+                f"R$ {item_data['subtotal']:.2f}"
+            ), iid=produto_id)
+            self.total_venda += item_data['subtotal']
         
         self.total_bruto_label.config(text=f"Total Bruto: R$ {self.total_venda:.2f}")
-        # Zera os campos de desconto, juros e pontos ao atualizar carrinho
-        self.desconto_entry_var.set("0.00") # Usa o StringVar para setar o valor
-        self.juros_entry_var.set("0.00") # Usa o StringVar para setar o valor
+        self.desconto_entry_var.set("0.00")
+        self.juros_entry_var.set("0.00")
         self.pontos_utilizar_entry.delete(0, tk.END)
         self.pontos_utilizar_entry.insert(0, "0")
         self.desconto_aplicado = 0.0
@@ -613,9 +590,8 @@ class PDVGUI(ttk.Frame):
         self.update_total_with_discount()
 
     def update_total_with_discount(self):
-        # Desconto manual
         try:
-            desconto_manual_valor = float(self.desconto_entry_var.get().replace(',', '.')) # Pega do StringVar
+            desconto_manual_valor = float(self.desconto_entry_var.get().replace(',', '.'))
         except ValueError:
             desconto_manual_valor = 0.0
 
@@ -631,9 +607,8 @@ class PDVGUI(ttk.Frame):
             else:
                 self.desconto_aplicado = 0.0
 
-        # Juros
         try:
-            juros_valor_input = float(self.juros_entry_var.get().replace(',', '.')) # Pega do StringVar
+            juros_valor_input = float(self.juros_entry_var.get().replace(',', '.'))
         except ValueError:
             juros_valor_input = 0.0
 
@@ -652,10 +627,8 @@ class PDVGUI(ttk.Frame):
                 self.juros_aplicados = 0.0
 
 
-        # Cálculo do total final
         self.total_final_com_desconto = subtotal_pos_desconto_e_pontos + self.juros_aplicados
         
-        # Garante que o total final não seja negativo
         if self.total_final_com_desconto < 0:
             self.total_final_com_desconto = 0.0
 
@@ -727,7 +700,6 @@ class PDVGUI(ttk.Frame):
 
         valor_desconto_pontos = pontos_a_utilizar * self.VALOR_POR_PONTO
 
-        # Calcula o subtotal para ver o máximo de desconto de pontos aplicável
         current_desconto_manual_valor = 0.0
         try:
             desconto_manual_str = self.desconto_entry_var.get().replace(',', '.')
@@ -739,9 +711,6 @@ class PDVGUI(ttk.Frame):
         except ValueError:
             current_desconto_manual_valor = 0.0
         
-        # Considera juros já calculados no remaining_total
-        # Ajustei o cálculo aqui para usar o total_venda menos o desconto manual (e antes dos juros)
-        # para a validação do valor máximo de pontos.
         total_para_validar_pontos = self.total_venda - current_desconto_manual_valor 
 
         if valor_desconto_pontos > total_para_validar_pontos:
@@ -764,17 +733,17 @@ class PDVGUI(ttk.Frame):
         
         item_sku = self.cart_tree.item(selected_item, 'values')[0]
         
-        self.carrinho = [item for item in self.carrinho if item['sku'] != item_sku]
+        self.carrinho = {prod_id: data for prod_id, data in self.carrinho.items() if data['sku'] != item_sku}
         self.update_cart_display()
+        self.update_totals()
 
     def clear_cart(self):
         if messagebox.askyesno("Limpar Carrinho", "Tem certeza que deseja limpar todo o carrinho?"):
-            self.carrinho = []
-            self.total_venda = 0.0
-            self.desconto_aplicado = 0.0
-            self.juros_aplicados = 0.0
-            self.total_final_com_desconto = 0.0
-            self.pontos_utilizados = 0
+            self.carrinho = {}
+            self.update_cart_display()
+            self.update_totals()
+            self.sku_entry.focus_set()
+
             self.desconto_entry_var.set("0.00")
             self.juros_entry_var.set("0.00")
             self.pontos_utilizar_entry.delete(0, tk.END)
@@ -783,9 +752,6 @@ class PDVGUI(ttk.Frame):
             self.juros_aplicados_label.config(text="Juros Aplicados: R$ 0.00")
             self.juros_tipo_var.set("Percentual")
 
-            self.update_cart_display()
-            messagebox.showinfo("Carrinho Limpo", "O carrinho foi esvaziado.")
-            self.sku_entry.focus_set()
 
     def finalize_sale(self):
         if not self.carrinho:
@@ -796,7 +762,7 @@ class PDVGUI(ttk.Frame):
         try:
             desconto_valor_input = float(self.desconto_entry_var.get().replace(',', '.'))
         except ValueError:
-            messagebox.showerror("Erro de Validação", "Valor do desconto inválido. Use um número.", parent=self.master)
+            messagebox.showerror("Erro de Validação", "Valor do desconto inválido. Usar um número.", parent=self.master)
             return
 
         if self.desconto_tipo_var.get() == "Percentual" and not (0 <= desconto_valor_input <= 100):
@@ -810,7 +776,7 @@ class PDVGUI(ttk.Frame):
         try:
             juros_valor_input = float(self.juros_entry_var.get().replace(',', '.'))
         except ValueError:
-            messagebox.showerror("Erro de Validação", "Valor dos juros inválido. Use um número.", parent=self.master)
+            messagebox.showerror("Erro de Validação", "Valor dos juros inválido. Usar um número.", parent=self.master)
             return
         if self.juros_tipo_var.get() == "Percentual" and juros_valor_input < 0:
             messagebox.showerror("Erro de Validação", "Porcentagem de juros não pode ser negativa.", parent=self.master)
@@ -862,25 +828,22 @@ class PDVGUI(ttk.Frame):
         conn = self.get_db_connection()
         cursor = conn.cursor()
         try:
-            # 1. Registrar a Venda
+            conn.execute("BEGIN TRANSACTION")
+
             data_hora = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             
             cursor.execute("INSERT INTO vendas (data_hora, total_venda, desconto_aplicado, juros_aplicados, total_final, forma_pagamento, tipo_cartao, parcelas_total, parcelas_pagas, vendedor_id, cliente_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                            (data_hora, self.total_venda, self.desconto_aplicado, self.juros_aplicados, self.total_final_com_desconto, forma_pagamento, tipo_cartao, parcelas_total, parcelas_pagas, vendedor_id, cliente_id))
             venda_id = cursor.lastrowid
 
-            # 2. Registrar Itens da Venda e Atualizar Estoque
-            for item in self.carrinho:
+            for produto_id, item_data in self.carrinho.items():
                 cursor.execute("INSERT INTO itens_venda (venda_id, produto_id, quantidade, preco_unitario) VALUES (?, ?, ?, ?)",
-                               (venda_id, item['product_id'], item['quantidade'], item['preco_unitario']))
+                               (venda_id, produto_id, item_data['quantidade'], item_data['preco_unitario']))
                 
-                # CORREÇÃO: Usar 'quantidade' ao invés de 'quantity' para atualizar o estoque
                 cursor.execute("UPDATE produtos SET quantidade = quantidade - ? WHERE id = ?", 
-                               (item['quantidade'], item['product_id']))
+                               (item_data['quantidade'], produto_id))
             
-            # 3. Gerar Parcelas se for 'A Prazo'
             if forma_pagamento == "A Prazo":
-                # O valor da parcela já deve incluir os juros, pois ele se baseia no total_final_com_desconto
                 valor_parcela_unit = round(self.total_final_com_desconto / parcelas_total, 2)
                 
                 for i in range(1, parcelas_total + 1):
@@ -893,7 +856,6 @@ class PDVGUI(ttk.Frame):
                     cursor.execute("INSERT INTO parcelas (venda_id, numero_parcela, valor_parcela, data_vencimento, status) VALUES (?, ?, ?, ?, ?)",
                                    (venda_id, i, valor, data_vencimento, 'Pendente'))
             
-            # 4. Gerenciar Pontos do Cliente
             if cliente_id:
                 pontos_ganhos = int(self.total_final_com_desconto * self.PONTOS_POR_REAL)
                 
@@ -908,13 +870,12 @@ class PDVGUI(ttk.Frame):
                     cursor.execute("INSERT INTO movimentacoes_pontos (cliente_id, data_hora, tipo_movimentacao, pontos, referencia_id, motivo) VALUES (?, ?, ?, ?, ?, ?)",
                                    (cliente_id, data_hora, "Utilizacao", self.pontos_utilizados, venda_id, "Desconto na Compra"))
             
-            # 5. Registrar Movimentação no Caixa
             responsavel_id = vendedor_id
             forma_pag = forma_pagamento
             descricao_mov = f"Venda ID {venda_id}"
             
-            if forma_pagamento != "A Prazo": # Entradas de vendas à vista
-                cursor.execute("INSERT INTO movimentacoes_caixa (data_hora, tipo, valor, forma_pagamento, descricao, referencia_id, tabela_referencia, responsavel_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            if forma_pagamento != "A Prazo":
+                cursor.execute("INSERT INTO movimentacoes_caixa (data_hora, tipo_movimentacao, valor, forma_pagamento, descricao, referencia_id, tabela_referencia, responsavel_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                                (data_hora, "Entrada", self.total_final_com_desconto, forma_pag, descricao_mov, venda_id, "vendas", responsavel_id))
 
 

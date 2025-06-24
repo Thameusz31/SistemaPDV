@@ -5,13 +5,12 @@ from database import DATABASE_NAME
 import uuid # Para gerar SKUs únicos mais facilmente
 
 class ProdutosGUI(ttk.Frame):
-    def __init__(self, master): # 'master' é o frame pai que vem do MainApp
-        super().__init__(master, padding="15") # Adiciona padding ao frame deste módulo
-        self.master = master # Mantém a referência ao frame pai se precisar
+    def __init__(self, master):
+        super().__init__(master, padding="15")
+        self.master = master
 
         self.conn = self.get_db_connection()
 
-        # Agora, os LabelFrames e outros widgets são pack/grid DIRETAMENTE NESTE self
         self.frame_form = ttk.LabelFrame(self, text="Cadastro/Edição de Produto", padding="15")
         self.frame_form.pack(pady=10, padx=10, fill="x")
         self.frame_form.columnconfigure(1, weight=1)
@@ -44,7 +43,7 @@ class ProdutosGUI(ttk.Frame):
         
         self.entries = {}
         for i, (label_text, key_name) in enumerate(field_configs):
-            ttk.Label(parent_frame, text=label_text).grid(row=i, column=0, sticky="w", pady=4, padx=5)
+            ttk.Label(parent_frame, text=label_text).grid(row=i, column=0, sticky="w", pady=4, padx=5) # REMOVIDO background='white'
             entry = ttk.Entry(parent_frame, width=40)
             entry.grid(row=i, column=1, sticky="ew", pady=4, padx=5)
             self.entries[key_name] = entry
@@ -166,8 +165,7 @@ class ProdutosGUI(ttk.Frame):
         for entry in self.entries.values():
             entry.delete(0, tk.END)
         self.entries["estoque_minimo"].insert(0, "0")
-        # CORREÇÃO AQUI: Usando winfo_toplevel() para acessar a janela principal
-        self.winfo_toplevel().title("Sistema Loja Streetwear - Gestão Integrada") 
+        self.winfo_toplevel().title("Sistema Loja Streetwear - Gestão Integrada")
         self.frame_form.config(text="Cadastro/Edição de Produto")
         
     def edit_selected_product(self):
@@ -198,8 +196,7 @@ class ProdutosGUI(ttk.Frame):
             self.entries["sku"].insert(0, product_data['sku'])
             
             self.product_id_to_edit = product_id
-            # CORREÇÃO AQUI: Usando winfo_toplevel() para acessar a janela principal
-            self.winfo_toplevel().title(f"Sistema Loja Streetwear - Editando: {product_data['nome']}") 
+            self.winfo_toplevel().title(f"Sistema Loja Streetwear - Editando: {product_data['nome']}")
             self.frame_form.config(text=f"Editando Produto: {product_data['nome']}")
 
     def delete_selected_product(self):
