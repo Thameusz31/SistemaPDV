@@ -6,7 +6,7 @@ def create_tables():
     conn = sqlite3.connect(DATABASE_NAME)
     cursor = conn.cursor()
 
-    # Tabela de Produtos (CORREÇÃO: Garantindo que SKU e estoque_minimo existam)
+    # Tabela de Produtos (SEM ALTERAÇÃO)
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS produtos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -17,8 +17,8 @@ def create_tables():
             preco_custo REAL NOT NULL,
             preco_venda REAL NOT NULL,
             quantidade INTEGER NOT NULL,
-            sku TEXT UNIQUE, -- COLUNA 'SKU' CORRIGIDA/ADICIONADA
-            estoque_minimo INTEGER DEFAULT 0 -- COLUNA 'ESTOQUE_MINIMO' CORRIGIDA/ADICIONADA
+            sku TEXT UNIQUE,
+            estoque_minimo INTEGER DEFAULT 0
         )
     ''')
 
@@ -32,17 +32,17 @@ def create_tables():
         )
     ''')
 
-    # Tabela de Clientes (CORREÇÃO FINALMENTE VERIFICADA)
+    # Tabela de Clientes (CORREÇÃO FINAL: Removendo 'email' e 'endereco')
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS clientes (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             nome TEXT NOT NULL,
             cpf TEXT UNIQUE,
             telefone TEXT,
-            email TEXT UNIQUE,
+            -- email TEXT UNIQUE, -- REMOVIDO
             data_nascimento TEXT,
-            pontos INTEGER DEFAULT 0,
-            endereco TEXT
+            pontos INTEGER DEFAULT 0
+            -- endereco TEXT -- REMOVIDO
         )
     ''')
 
@@ -51,10 +51,10 @@ def create_tables():
         CREATE TABLE IF NOT EXISTS vendas (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             data_hora TEXT NOT NULL,
-            total_venda REAL NOT NULL, -- Total BRUTO
+            total_venda REAL NOT NULL,
             desconto_aplicado REAL NOT NULL DEFAULT 0.0,
             juros_aplicados REAL NOT NULL DEFAULT 0.0,
-            total_final REAL NOT NULL, -- Total Líquido (com desconto e juros)
+            total_final REAL NOT NULL,
             forma_pagamento TEXT NOT NULL,
             tipo_cartao TEXT,
             parcelas_total INTEGER DEFAULT 1,
@@ -122,7 +122,7 @@ def create_tables():
         )
     ''')
 
-    # Tabela de Movimentações de Caixa (CORREÇÃO FINALMENTE CONFIRMADA)
+    # Tabela de Movimentações de Caixa (SEM ALTERAÇÃO)
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS movimentacoes_caixa (
             id INTEGER PRIMARY KEY AUTOINCREMENT,

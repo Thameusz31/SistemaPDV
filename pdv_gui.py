@@ -101,23 +101,19 @@ class PDVGUI(ttk.Frame):
         self.frame_total_pagamento.columnconfigure(1, weight=1)
 
 
-        # --- Frame para Histórico de Vendas (Aba 2) ---
         self.frame_historico_tab = ttk.Frame(self.notebook, padding="10")
         self.notebook.add(self.frame_historico_tab, text="Histórico de Vendas")
         self.frame_historico_tab.columnconfigure(0, weight=1)
 
-        # --- Criação dos widgets que dependem das variáveis StringVar ---
         self.vendedor_dropdown = ttk.OptionMenu(self.frame_vendedor_cliente, self.selected_vendedor_var, "")
         self.cliente_dropdown = ttk.OptionMenu(self.frame_vendedor_cliente, self.selected_cliente_var, "")
         
-        # Widgets de pagamento: Criados aqui, mas não empacotados/grid.
         self.tipo_cartao_label = ttk.Label(self.frame_total_pagamento, text="Tipo Cartão:")
         self.tipo_cartao_menu = ttk.OptionMenu(self.frame_total_pagamento, self.tipo_cartao_var, self.tipo_cartao_options[0], *self.tipo_cartao_options)
 
         self.parcelas_label = ttk.Label(self.frame_total_pagamento, text="Parcelas:")
         self.parcelas_menu = ttk.OptionMenu(self.frame_total_pagamento, self.parcelas_var, self.parcelas_options[0], *self.parcelas_options)
         
-        # Widgets de filtro do histórico: Criados aqui, MAS SERÃO GRID-ED DENTRO DE `filter_controls_frame`
         self.filter_vendedor_menu = ttk.OptionMenu(self.frame_historico_tab, self.filter_vendedor_var, "Todos")
         self.filter_cliente_menu = ttk.OptionMenu(self.frame_historico_tab, self.filter_cliente_var, "Todos")
         self.filter_tipo_cartao_menu = ttk.OptionMenu(self.frame_historico_tab, self.filter_tipo_cartao_var, self.filter_tipo_cartao_options[0], *self.filter_tipo_cartao_options)
@@ -125,7 +121,6 @@ class PDVGUI(ttk.Frame):
         self.filter_pagamento_menu = ttk.OptionMenu(self.frame_historico_tab, self.filter_pagamento_var, self.filter_pagamento_options[0], *self.filter_pagamento_options)
 
 
-        # Chamadas para criar e configurar os widgets (passando os frames corretos como pais)
         self.create_vendedor_cliente_selection(self.frame_vendedor_cliente)
         self.create_input_widgets(self.frame_input)
         self.create_carrinho_widgets(self.frame_carrinho)
@@ -133,8 +128,8 @@ class PDVGUI(ttk.Frame):
         self.create_total_pagamento_widgets(self.frame_total_pagamento)
         self.create_historico_widgets(self.frame_historico_tab)
         
-        # CORREÇÃO: Mover a chamada _load_vendedores_clientes_for_dropdowns() para após a criação de todos os widgets,
-        # incluindo os labels de pontos, etc., que ela tenta configurar.
+        self.produtos_dict = {}
+        self.load_produtos_for_sku_lookup()
         self._load_vendedores_clientes_for_dropdowns() 
         self.load_vendas_historico()
 
@@ -145,6 +140,22 @@ class PDVGUI(ttk.Frame):
         conn = sqlite3.connect(DATABASE_NAME)
         conn.row_factory = sqlite3.Row
         return conn
+
+    def load_produtos_for_sku_lookup(self):
+        conn = self.get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, nome, sku, preco_venda, quantidade FROM produtos")
+        produtos_db = cursor.fetchall()
+        conn.close()
+
+        self.produtos_dict = {}
+        for p in produtos_db:
+            self.produtos_dict[p['sku']] = {
+                'id': p['id'],
+                'nome': p['nome'],
+                'preco_venda': p['preco_venda'],
+                'estoque_atual': p['quantidade']
+            }
     
     def _load_vendedores_clientes_for_dropdowns(self):
         self.vendedores_dict = {}
@@ -204,14 +215,12 @@ class PDVGUI(ttk.Frame):
                 menu_filter_cliente.add_command(label=nome, command=tk._setit(self.filter_cliente_var, nome))
             self.filter_cliente_var.set(cliente_nomes_for_filter[0])
 
-        # CORREÇÃO: Verifica se os labels existem antes de configurar, para robustez
-        if hasattr(self, 'pontos_disponiveis_label'): # Verifica se o label já foi criado
+        if hasattr(self, 'pontos_disponiveis_label'):
             self.update_pontos_display()
 
     def update_pontos_display(self, *args):
-        # Adicionado verificação para garantir que os widgets existam
         if not hasattr(self, 'pontos_disponiveis_label') or self.pontos_disponiveis_label is None:
-            return # Sai da função se o widget ainda não foi criado
+            return
 
         selected_client_display = self.selected_cliente_var.get()
         if selected_client_display == "-- Selecione --":
@@ -245,6 +254,8 @@ class PDVGUI(ttk.Frame):
         popup.geometry("500x300")
         popup.grab_set()
 
+        popup.config(bg="white")
+
         ttk.Label(popup, text="Nome:").grid(row=0, column=0, padx=5, pady=5)
         name_entry = ttk.Entry(popup, width=40)
         name_entry.grid(row=0, column=1, padx=5, pady=5)
@@ -252,46 +263,47 @@ class PDVGUI(ttk.Frame):
         ttk.Label(popup, text="Telefone:").grid(row=1, column=0, padx=5, pady=5)
         tel_entry = ttk.Entry(popup, width=40)
         tel_entry.grid(row=1, column=1, padx=5, pady=5)
-
-        ttk.Label(popup, text="Email:").grid(row=2, column=0, padx=5, pady=5)
-        email_entry = ttk.Entry(popup, width=40)
-        email_entry.grid(row=2, column=1, padx=5, pady=5)
-
-        ttk.Label(popup, text="Data Nasc. (AAAA-MM-DD):").grid(row=3, column=0, padx=5, pady=5)
+        
+        ttk.Label(popup, text="Data Nasc. (DD-MM-AAAA):").grid(row=2, column=0, padx=5, pady=5)
         dob_entry = ttk.Entry(popup, width=40)
-        dob_entry.grid(row=3, column=1, padx=5, pady=5)
-
+        dob_entry.grid(row=2, column=1, padx=5, pady=5)
+        
         def save_and_close():
             nome = name_entry.get().strip()
             telefone = tel_entry.get().strip()
-            email = email_entry.get().strip()
             data_nascimento = dob_entry.get().strip()
 
             if not nome:
                 messagebox.showerror("Erro", "Nome do cliente é obrigatório.", parent=popup)
                 return
+            
+            data_nascimento_db = None
+            if data_nascimento:
+                try:
+                    data_obj = datetime.strptime(data_nascimento, "%d-%m-%Y").date()
+                    data_nascimento_db = data_obj.strftime("%Y-%m-%d")
+                except ValueError:
+                    messagebox.showerror("Erro de Validação", "Formato de Data de Nascimento inválido. Use DD-MM-AAAA.", parent=popup)
+                    return
 
             conn_popup = self.get_db_connection()
             cursor_popup = conn_popup.cursor()
             try:
-                cursor_popup.execute("INSERT INTO clientes (nome, telefone, email, data_nascimento, pontos) VALUES (?, ?, ?, ?, 0)",
-                                   (nome, telefone, email, data_nascimento))
+                cursor_popup.execute("INSERT INTO clientes (nome, telefone, data_nascimento, pontos) VALUES (?, ?, ?, 0)",
+                                   (nome, telefone, data_nascimento_db))
                 conn_popup.commit()
                 messagebox.showinfo("Sucesso", f"Cliente '{nome}' cadastrado!", parent=popup)
                 self._load_vendedores_clientes_for_dropdowns()
                 self.selected_cliente_var.set(f"{nome} (Pontos: 0)")
                 popup.destroy()
             except sqlite3.IntegrityError as e:
-                if "UNIQUE constraint failed: clientes.email" in str(e):
-                    messagebox.showerror("Erro", "Erro: Já existe um cliente com este e-mail.", parent=popup)
-                else:
-                    messagebox.showerror("Erro", f"Erro ao cadastrar cliente: {e}", parent=popup)
+                messagebox.showerror("Erro", f"Erro ao cadastrar cliente: {e}", parent=popup)
             except Exception as e:
                 messagebox.showerror("Erro", f"Erro: {e}", parent=popup)
             finally:
                 conn_popup.close()
 
-        ttk.Button(popup, text="Cadastrar e Selecionar", command=save_and_close, style='Accent.TButton').grid(row=4, column=0, columnspan=2, pady=10)
+        ttk.Button(popup, text="Cadastrar e Selecionar", command=save_and_close, style='Accent.TButton').grid(row=3, column=0, columnspan=2, pady=10)
         popup.focus_set()
 
 
@@ -376,7 +388,7 @@ class PDVGUI(ttk.Frame):
         self.pontos_utilizar_entry.insert(0, "0")
         self.pontos_utilizar_entry.bind("<KeyRelease>", lambda event=None: self.calculate_points_redeem_value())
 
-        self.utilizar_valor_label = ttk.Label(parent_frame, text="Valor Utilizado: R$ 0.00", font=("Arial", 10)).grid(row=7, column=2, sticky="w", padx=5, pady=2)
+        self.utilizar_valor_label = ttk.Label(parent_frame, text="Valor Utilizado: R$ 0.00", font=("Arial", 10)).grid(row=7, column=2, columnspan=2, sticky="w", padx=5, pady=2)
 
         self.apply_points_discount_button = ttk.Button(parent_frame, text="Aplicar Utilização de Pontos", command=self.apply_points_discount, style='Accent.TButton')
         self.apply_points_discount_button.grid(row=8, column=0, columnspan=4, pady=5)
@@ -526,7 +538,7 @@ class PDVGUI(ttk.Frame):
 
         conn = self.get_db_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT id, nome, preco_venda, quantidade FROM produtos WHERE sku = ?", (sku,))
+        cursor.execute("SELECT id, nome, preco_venda, quantidade, sku FROM produtos WHERE sku = ?", (sku,))
         produto = cursor.fetchone()
         conn.close()
 
@@ -539,9 +551,10 @@ class PDVGUI(ttk.Frame):
             return
 
         found_in_cart = False
-        for item in self.carrinho:
-            if item['sku'] == sku:
-                item['quantidade'] += quantidade
+        for prod_id_in_cart, item_in_cart_data in self.carrinho.items():
+            if item_in_cart_data['sku'] == produto['sku']:
+                item_in_cart_data['quantidade'] += quantidade
+                item_in_cart_data['subtotal'] = item_in_cart_data['quantidade'] * item_in_cart_data['preco_unitario']
                 found_in_cart = True
                 break
         
@@ -731,9 +744,11 @@ class PDVGUI(ttk.Frame):
             messagebox.showwarning("Aviso", "Nenhum item selecionado no carrinho para remover.")
             return
         
-        item_sku = self.cart_tree.item(selected_item, 'values')[0]
+        item_id_to_remove = self.cart_tree.item(selected_item, 'iid')
         
-        self.carrinho = {prod_id: data for prod_id, data in self.carrinho.items() if data['sku'] != item_sku}
+        if int(item_id_to_remove) in self.carrinho:
+            del self.carrinho[int(item_id_to_remove)]
+        
         self.update_cart_display()
         self.update_totals()
 
@@ -1060,9 +1075,3 @@ class PDVGUI(ttk.Frame):
 
         details_str += f"Vendedor: {venda_info['vendedor_nome'] if venda_info['vendedor_nome'] else 'Não Informado'}\n"
         details_str += f"Cliente: {venda_info['cliente_nome'] if venda_info['cliente_nome'] else 'Não Informado'}\n\n"
-        details_str += "Itens Vendidos:\n"
-        
-        for item in itens_venda:
-            details_str += f"- {item['nome']} (x{item['quantidade']}) @ R$ {item['preco_unitario']:.2f} cada\n"
-
-        messagebox.showinfo("Detalhes da Venda", details_str)

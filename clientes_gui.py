@@ -2,7 +2,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 import sqlite3
 from database import DATABASE_NAME
-from datetime import datetime, timedelta # Importar timedelta, embora não usado diretamente aqui, é bom para contexto
+from datetime import datetime, timedelta
 
 class ClientesGUI(ttk.Frame):
     def __init__(self, master):
@@ -29,26 +29,25 @@ class ClientesGUI(ttk.Frame):
         return conn
 
     def create_form_widgets(self, parent_frame):
-        # CORREÇÃO: Adicionando 'data_nascimento' e 'pontos' nos campos
         field_configs = [
             ("Nome:", "nome"),
-            ("CPF:", "cpf"),        # COLUNA ESPERADA
+            ("CPF:", "cpf"),
             ("Telefone:", "telefone"),
-            ("Email:", "email"),
-            ("Data Nasc. (AAAA-MM-DD):", "data_nascimento"), # COLUNA ESPERADA
-            ("Pontos:", "pontos"),   # COLUNA ESPERADA
-            ("Endereço:", "endereco") # COLUNA ESPERADA
+            ("Data Nasc. (DD-MM-AAAA):", "data_nascimento"),
+            ("Pontos:", "pontos")
         ]
         
         self.entries = {}
         for i, (label_text, key_name) in enumerate(field_configs):
-            ttk.Label(parent_frame, text=label_text, background='white').grid(row=i, column=0, sticky="w", pady=4, padx=5)
+            ttk.Label(parent_frame, text=label_text).grid(row=i, column=0, sticky="w", pady=4, padx=5)
             entry = ttk.Entry(parent_frame, width=40)
             entry.grid(row=i, column=1, sticky="ew", pady=4, padx=5)
             self.entries[key_name] = entry
         
+        # --- Configuração do valor padrão para 'Pontos' ---
+        self.entries["pontos"].insert(0, "0") # Adicionado para que já venha com '0'
+
         # --- Configuração das máscaras ---
-        # Certifique-se de que os campos existam antes de bindar
         if "cpf" in self.entries:
             self.entries["cpf"].bind("<KeyRelease>", lambda event: self.format_cpf(self.entries["cpf"]))
         if "telefone" in self.entries:
@@ -66,8 +65,7 @@ class ClientesGUI(ttk.Frame):
         self.cliente_id_to_edit = None
 
     def create_list_widgets(self, parent_frame):
-        # CORREÇÃO: Adicionando 'Pontos' e 'Endereço' às colunas da Treeview
-        columns = ("ID", "Nome", "CPF", "Telefone", "Email", "Data Nasc.", "Pontos", "Endereço")
+        columns = ("ID", "Nome", "CPF", "Telefone", "Data Nasc.", "Pontos")
         self.tree = ttk.Treeview(parent_frame, columns=columns, show="headings", selectmode="browse")
 
         for col in columns:
@@ -80,17 +78,11 @@ class ClientesGUI(ttk.Frame):
                 self.tree.column(col, width=120, anchor="center")
             elif col == "Telefone":
                 self.tree.column(col, width=120, anchor="center")
-            elif col == "Email":
-                self.tree.column(col, width=150, anchor="w")
             elif col == "Data Nasc.":
                 self.tree.column(col, width=100, anchor="center")
-            elif col == "Pontos": # CORREÇÃO: Coluna Pontos
+            elif col == "Pontos":
                 self.tree.column(col, width=70, anchor="center")
-            elif col == "Endereço": # CORREÇÃO: Coluna Endereço
-                self.tree.column(col, width=200, anchor="w")
-            else:
-                self.tree.column(col, width=80, anchor="center")
-
+        
         self.tree.pack(fill="both", expand=True)
 
         scrollbar = ttk.Scrollbar(parent_frame, orient="vertical", command=self.tree.yview)
@@ -110,22 +102,28 @@ class ClientesGUI(ttk.Frame):
 
         conn = self.get_db_connection()
         cursor = conn.cursor()
-        # CORREÇÃO: Selecionar todas as colunas que são usadas, incluindo cpf, data_nascimento, pontos e endereco
-        cursor.execute("SELECT id, nome, cpf, telefone, email, data_nascimento, pontos, endereco FROM clientes ORDER BY nome")
+        cursor.execute("SELECT id, nome, cpf, telefone, data_nascimento, pontos FROM clientes ORDER BY nome")
         clientes = cursor.fetchall()
-        conn.close()
-
+    
         for c in clientes:
-            self.tree.insert("", "end", values=(c['id'], c['nome'], c['cpf'], c['telefone'], c['email'], c['data_nascimento'], c['pontos'], c['endereco']))
+            data_nasc_exibicao = ""
+            if c['data_nascimento']:
+                try:
+                    data_obj = datetime.strptime(c['data_nascimento'], "%Y-%m-%d").date()
+                    data_nasc_exibicao = data_obj.strftime("%d-%m-%Y")
+                except ValueError:
+                    data_nasc_exibicao = c['data_nascimento']
+
+            self.tree.insert("", "end", values=(c['id'], c['nome'], c['cpf'], c['telefone'], data_nasc_exibicao, c['pontos']))
+        conn.close() # Fechar a conexão aqui
+
 
     def add_cliente(self):
         nome = self.entries["nome"].get().strip()
         cpf = self.entries["cpf"].get().strip()
         telefone = self.entries["telefone"].get().strip()
-        email = self.entries["email"].get().strip()
-        data_nascimento = self.entries["data_nascimento"].get().strip()
+        data_nascimento_input = self.entries["data_nascimento"].get().strip()
         pontos_str = self.entries["pontos"].get().strip()
-        endereco = self.entries["endereco"].get().strip() # NOVO: Pega o endereço
 
         if not nome:
             messagebox.showerror("Erro de Validação", "Nome do cliente é obrigatório.")
@@ -138,6 +136,15 @@ class ClientesGUI(ttk.Frame):
             messagebox.showerror("Erro de Validação", "Pontos devem ser um número inteiro positivo ou zero.")
             return
 
+        data_nascimento_db = None
+        if data_nascimento_input:
+            try:
+                data_obj = datetime.strptime(data_nascimento_input, "%d-%m-%Y").date()
+                data_nascimento_db = data_obj.strftime("%Y-%m-%d")
+            except ValueError:
+                messagebox.showerror("Erro de Validação", "Formato de Data de Nascimento inválido. Use DD-MM-AAAA.")
+                return
+
         conn = self.get_db_connection()
         cursor = conn.cursor()
 
@@ -145,13 +152,13 @@ class ClientesGUI(ttk.Frame):
             if self.cliente_id_to_edit:
                 cursor.execute("""
                     UPDATE clientes SET
-                    nome = ?, cpf = ?, telefone = ?, email = ?, data_nascimento = ?, pontos = ?, endereco = ?
+                    nome = ?, cpf = ?, telefone = ?, data_nascimento = ?, pontos = ?
                     WHERE id = ?
-                """, (nome, cpf, telefone, email, data_nascimento, pontos, endereco, self.cliente_id_to_edit)) # CORREÇÃO: Adicionado endereco
+                """, (nome, cpf, telefone, data_nascimento_db, pontos, self.cliente_id_to_edit))
                 messagebox.showinfo("Sucesso", "Cliente atualizado com sucesso!")
             else:
-                cursor.execute("INSERT INTO clientes (nome, cpf, telefone, email, data_nascimento, pontos, endereco) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                               (nome, cpf, telefone, email, data_nascimento, pontos, endereco)) # CORREÇÃO: Adicionado endereco
+                cursor.execute("INSERT INTO clientes (nome, cpf, telefone, data_nascimento, pontos) VALUES (?, ?, ?, ?, ?)",
+                               (nome, cpf, telefone, data_nascimento_db, pontos))
                 messagebox.showinfo("Sucesso", f"Cliente '{nome}' cadastrado com sucesso!")
             
             conn.commit()
@@ -159,9 +166,7 @@ class ClientesGUI(ttk.Frame):
             self.clear_form()
 
         except sqlite3.IntegrityError as e:
-            if "UNIQUE constraint failed: clientes.email" in str(e):
-                messagebox.showerror("Erro", f"Erro: Já existe um cliente com o e-mail '{email}'.")
-            elif "UNIQUE constraint failed: clientes.cpf" in str(e):
+            if "UNIQUE constraint failed: clientes.cpf" in str(e):
                 messagebox.showerror("Erro", f"Erro: Já existe um cliente com o CPF '{cpf}'.")
             else:
                 messagebox.showerror("Erro", f"Erro ao salvar cliente: {e}")
@@ -173,7 +178,7 @@ class ClientesGUI(ttk.Frame):
     def clear_form(self):
         for entry in self.entries.values():
             entry.delete(0, tk.END)
-        self.entries["pontos"].insert(0, "0")
+        self.entries["pontos"].insert(0, "0") # Garante que o padrão seja 0 ao limpar
         self.cliente_id_to_edit = None
         self.winfo_toplevel().title("Sistema Loja Streetwear - Gestão Integrada")
         self.frame_form.config(text="Cadastro/Edição de Cliente")
@@ -198,10 +203,17 @@ class ClientesGUI(ttk.Frame):
             self.entries["nome"].insert(0, cliente_data['nome'])
             self.entries["cpf"].insert(0, cliente_data['cpf'] if cliente_data['cpf'] else "")
             self.entries["telefone"].insert(0, cliente_data['telefone'] if cliente_data['telefone'] else "")
-            self.entries["email"].insert(0, cliente_data['email'] if cliente_data['email'] else "")
-            self.entries["data_nascimento"].insert(0, cliente_data['data_nascimento'] if cliente_data['data_nascimento'] else "")
+            
+            data_nasc_exibicao = ""
+            if cliente_data['data_nascimento']:
+                try:
+                    data_obj = datetime.strptime(cliente_data['data_nascimento'], "%Y-%m-%d").date()
+                    data_nasc_exibicao = data_obj.strftime("%d-%m-%Y")
+                except ValueError:
+                    data_nasc_exibicao = cliente_data['data_nascimento']
+            self.entries["data_nascimento"].insert(0, data_nasc_exibicao)
+            
             self.entries["pontos"].insert(0, str(cliente_data['pontos']))
-            self.entries["endereco"].insert(0, cliente_data['endereco'] if cliente_data['endereco'] else "")
             
             self.cliente_id_to_edit = cliente_id
             self.winfo_toplevel().title(f"Sistema Loja Streetwear - Editando Cliente: {cliente_data['nome']}")
@@ -230,7 +242,6 @@ class ClientesGUI(ttk.Frame):
             conn = self.get_db_connection()
             cursor = conn.cursor()
             try:
-                # Remove as movimentações de pontos primeiro para evitar erro de FOREIGN KEY
                 cursor.execute("DELETE FROM movimentacoes_pontos WHERE cliente_id = ?", (cliente_id,))
                 cursor.execute("DELETE FROM clientes WHERE id = ?", (cliente_id,))
                 conn.commit()
@@ -274,7 +285,7 @@ class ClientesGUI(ttk.Frame):
         history_window.geometry("950x550")
         history_window.grab_set()
 
-        ttk.Label(history_window, text=f"Histórico de Compras de: {cliente_nome}", font=("Arial", 14, "bold"), background='white').pack(pady=10)
+        ttk.Label(history_window, text=f"Histórico de Compras de: {cliente_nome}", font=("Arial", 14, "bold")).pack(pady=10)
 
         columns = ("ID Venda", "Data/Hora", "Total Bruto", "Desconto", "Juros", "Pontos Utilizados", "Total Final", "Forma Pgto", "Tipo Cartão", "Parcelas", "Vendedor")
         history_tree = ttk.Treeview(history_window, columns=columns, show="headings", selectmode="browse")
@@ -303,7 +314,7 @@ class ClientesGUI(ttk.Frame):
         history_tree.pack(fill="both", expand=True, padx=10, pady=10)
 
         for venda in vendas:
-            vendedor_nome_exibicao = venda['vendedor_nome'] if venda['vendedor_nome'] else "Não Informado"
+            vendedor_nome_exibicao = venda['vendedor_nome'] if venda['vendedor_nome'] else "N/A"
             pontos_utilizados_exibicao = venda['pontos_utilizados_venda'] if venda['pontos_utilizados_venda'] is not None else 0
             tipo_cartao_exibicao = venda['tipo_cartao'] if venda['tipo_cartao'] else "N/A"
             parcelas_info = "N/A"
@@ -395,3 +406,59 @@ class ClientesGUI(ttk.Frame):
             details_str += f"- {item['nome']} (x{item['quantidade']}) @ R$ {item['preco_unitario']:.2f} cada\n"
 
         messagebox.showinfo("Detalhes da Venda", details_str, parent=parent_window)
+
+    def format_cpf(self, entry_widget):
+        text = entry_widget.get().replace(".", "").replace("-", "")
+        formatted_text = ""
+        for i, char in enumerate(text):
+            if not char.isdigit():
+                continue
+            formatted_text += char
+            if i == 2 or i == 5:
+                formatted_text += "."
+            elif i == 8:
+                formatted_text += "-"
+        
+        if len(formatted_text) > 14:
+            formatted_text = formatted_text[:14]
+
+        entry_widget.delete(0, tk.END)
+        entry_widget.insert(0, formatted_text)
+        entry_widget.icursor(tk.END) # Posiciona o cursor no final do texto
+
+    def format_phone(self, entry_widget):
+        text = entry_widget.get().replace("(", "").replace(")", "").replace(" ", "").replace("-", "")
+        formatted_text = ""
+        
+        if len(text) > 11:
+            text = text[:11]
+
+        if len(text) > 0:
+            formatted_text += "(" + text[0:2] + ")"
+            if len(text) > 2:
+                if len(text) > 7:
+                    formatted_text += " " + text[2:7] + "-" + text[7:]
+                else:
+                    formatted_text += " " + text[2:6] + "-" + text[6:]
+        
+        entry_widget.delete(0, tk.END)
+        entry_widget.insert(0, formatted_text)
+        entry_widget.icursor(tk.END) # Posiciona o cursor no final do texto
+
+    def format_date(self, entry_widget):
+        text = entry_widget.get().replace("-", "")
+        formatted_text = ""
+        
+        if len(text) > 8:
+            text = text[:8]
+
+        for i, char in enumerate(text):
+            if not char.isdigit():
+                continue
+            formatted_text += char
+            if i == 1 or i == 3: # DD-MM-AAAA
+                formatted_text += "-"
+        
+        entry_widget.delete(0, tk.END)
+        entry_widget.insert(0, formatted_text)
+        entry_widget.icursor(tk.END) # Posiciona o cursor no final do texto

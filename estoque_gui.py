@@ -30,7 +30,7 @@ class EstoqueGUI(ttk.Frame):
 
         self.create_widgets()
         self._load_vendedores_for_dropdown()
-        self.load_produtos_for_dropdown()
+        self.load_produtos_for_dropdown() # Carrega produtos para o dropdown de movimentação
         self.load_estoque_atual()
         self.load_historico_movimentacoes()
 
@@ -62,14 +62,16 @@ class EstoqueGUI(ttk.Frame):
         produtos_nomes_sku = ["-- Selecione o Produto --"]
         for p in produtos_db:
             display_name = f"{p['nome']} ({p['sku']})"
-            self.produtos_dict[display_name] = p['id']
+            self.produtos_dict[display_name] = {'id': p['id'], 'nome': p['nome'], 'sku': p['sku']} # Armazena ID, nome, sku
             produtos_nomes_sku.append(display_name)
         
-        menu_prod = self.produto_dropdown["menu"]
-        menu_prod.delete(0, "end")
-        for nome in produtos_nomes_sku:
-            menu_prod.add_command(label=nome, command=tk._setit(self.selected_produto_var, nome))
-        self.selected_produto_var.set(produtos_nomes_sku[0])
+        # Garante que o dropdown de produtos exista antes de tentar configurá-lo
+        if hasattr(self, 'produto_dropdown') and self.produto_dropdown is not None:
+            menu_prod = self.produto_dropdown["menu"]
+            menu_prod.delete(0, "end")
+            for nome in produtos_nomes_sku:
+                menu_prod.add_command(label=nome, command=tk._setit(self.selected_produto_var, nome))
+            self.selected_produto_var.set(produtos_nomes_sku[0])
 
 
     def create_widgets(self):
@@ -95,7 +97,7 @@ class EstoqueGUI(ttk.Frame):
         self.produto_dropdown.grid(row=0, column=1, columnspan=2, sticky="ew", pady=5, padx=5)
         self.produto_dropdown.config(width=40)
 
-        ttk.Label(parent_frame, text="Tipo:").grid(row=1, column=0, sticky="w", padx=5, pady=2)
+        ttk.Label(parent_frame, text="Tipo:").grid(row=1, column=0, sticky="w", pady=5, padx=5)
         ttk.Radiobutton(parent_frame, text="Entrada", value="Entrada", variable=self.tipo_mov_var).grid(row=1, column=1, sticky="w", padx=5)
         ttk.Radiobutton(parent_frame, text="Ajuste (+/-)", value="Ajuste", variable=self.tipo_mov_var).grid(row=1, column=2, sticky="w", padx=5)
 
@@ -120,12 +122,23 @@ class EstoqueGUI(ttk.Frame):
         parent_frame.columnconfigure(1, weight=1)
 
     def registrar_movimentacao(self):
-        produto_nome_sku = self.selected_produto_var.get()
-        if produto_nome_sku == "-- Selecione o Produto --":
+        produto_nome_sku_selecionado = self.selected_produto_var.get()
+        if produto_nome_sku_selecionado == "-- Selecione o Produto --":
             messagebox.showwarning("Aviso", "Por favor, selecione um produto.")
             return
 
-        produto_id = self.produtos_dict[produto_nome_sku]['id']
+        # CORREÇÃO: Acessar o dicionário de produtos corretamente
+        produto_info = self.produtos_dict.get(produto_nome_sku_selecionado)
+        if not produto_info: # Validação extra caso o produto não seja encontrado por algum motivo
+            messagebox.showerror("Erro", "Produto selecionado não encontrado nos registros.")
+            return
+            
+        produto_id = produto_info['id']
+        # Usar o nome do produto e SKU para mensagens
+        produto_nome = produto_info['nome']
+        produto_sku = produto_info['sku']
+
+
         tipo_mov = self.tipo_mov_var.get().strip()
         quantidade_str = self.quantidade_mov_var.get().strip()
         motivo = self.motivo_mov_var.get().strip()
@@ -140,6 +153,7 @@ class EstoqueGUI(ttk.Frame):
             if quantidade == 0:
                 messagebox.showerror("Erro", "Quantidade não pode ser zero.")
                 return
+            # Se for ajuste, pode ser negativo. Se for entrada, deve ser positivo.
             if tipo_mov == "Entrada" and quantidade < 0:
                 messagebox.showerror("Erro", "Para 'Entrada', a quantidade deve ser positiva.")
                 return
@@ -148,7 +162,7 @@ class EstoqueGUI(ttk.Frame):
             return
 
         custo_unitario = 0.0
-        if tipo_mov == "Entrada" or tipo_mov == "Ajuste":
+        if tipo_mov == "Entrada" or tipo_mov == "Ajuste": # Custo relevante para entrada ou ajuste
             if not custo_str:
                 if messagebox.askyesno("Confirmação", "Custo unitário está vazio. Deseja prosseguir com 0.00?", parent=self.master):
                     custo_unitario = 0.0
@@ -177,7 +191,7 @@ class EstoqueGUI(ttk.Frame):
                 new_qty += quantidade
             elif tipo_mov == "Ajuste":
                 new_qty += quantidade
-            # 'Saída' via PDV já é tratada lá e não vem por aqui.
+            # Saídas de estoque (via PDV) são tratadas no pdv_gui.py e não por aqui.
 
             if new_qty < 0:
                 messagebox.showerror("Erro", "Quantidade resultante não pode ser negativa. Ajuste a quantidade.")
@@ -187,7 +201,7 @@ class EstoqueGUI(ttk.Frame):
             cursor.execute("UPDATE produtos SET quantidade = ? WHERE id = ?", (new_qty, produto_id))
             
             conn.commit()
-            messagebox.showinfo("Sucesso", f"Movimentação de estoque registrada com sucesso para {produto_nome_sku}!")
+            messagebox.showinfo("Sucesso", f"Movimentação de estoque registrada com sucesso para {produto_nome} ({produto_sku})!")
             self.clear_movimentacao_form()
             self.load_estoque_atual()
             self.load_historico_movimentacoes()
@@ -209,7 +223,7 @@ class EstoqueGUI(ttk.Frame):
         filter_frame = ttk.Frame(parent_frame, padding="5")
         filter_frame.pack(pady=5, fill="x")
 
-        ttk.Label(filter_frame, text="Status:").pack(side="left", padx=5) # REMOVIDO background='white'
+        ttk.Label(filter_frame, text="Status:").pack(side="left", padx=5)
         self.filter_estoque_status_var = tk.StringVar(value="Todos")
         filter_status_options = ["Todos", "Em Estoque", "Abaixo do Mínimo", "Esgotado"]
         self.filter_estoque_status_menu = ttk.OptionMenu(filter_frame, self.filter_estoque_status_var, *filter_status_options)
@@ -271,16 +285,16 @@ class EstoqueGUI(ttk.Frame):
         filter_mov_frame = ttk.Frame(parent_frame, padding="5")
         filter_mov_frame.pack(pady=5, fill="x")
 
-        ttk.Label(filter_mov_frame, text="De:").grid(row=0, column=0, sticky="w", padx=2, pady=2) # REMOVIDO background='white'
+        ttk.Label(filter_mov_frame, text="De:").grid(row=0, column=0, sticky="w", padx=2, pady=2)
         self.data_inicio_mov_entry = ttk.Entry(filter_mov_frame, textvariable=self.data_inicio_mov_var, width=12)
         self.data_inicio_mov_entry.grid(row=0, column=1, sticky="ew", padx=2, pady=2)
         
-        ttk.Label(filter_mov_frame, text="Até:").grid(row=0, column=2, sticky="w", padx=2, pady=2) # REMOVIDO background='white'
+        ttk.Label(filter_mov_frame, text="Até:").grid(row=0, column=2, sticky="w", padx=2, pady=2)
         self.data_fim_mov_entry = ttk.Entry(filter_mov_frame, textvariable=self.data_fim_mov_var, width=12)
         self.data_fim_mov_entry.grid(row=0, column=3, sticky="ew", padx=2, pady=2)
         self.data_fim_mov_entry.insert(0, datetime.now().strftime("%Y-%m-%d"))
 
-        ttk.Label(filter_mov_frame, text="Tipo:").grid(row=1, column=0, sticky="w", padx=5, pady=2) # REMOVIDO background='white'
+        ttk.Label(filter_mov_frame, text="Tipo:").grid(row=1, column=0, sticky="w", padx=5, pady=2)
         self.filter_tipo_mov_menu = ttk.OptionMenu(filter_mov_frame, self.filter_tipo_mov_var, self.tipos_movimentacao_options[0], *self.tipos_movimentacao_options)
         self.filter_tipo_mov_menu.grid(row=1, column=1, sticky="ew", padx=2, pady=2)
         

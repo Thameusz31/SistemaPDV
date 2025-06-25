@@ -12,7 +12,7 @@ class RelatoriosGUI(ttk.Frame):
 
         # Variáveis para filtros
         self.data_inicio_var = tk.StringVar(value=(datetime.now().replace(day=1)).strftime("%Y-%m-%d"))
-        self.data_fim_var = tk.StringVar(value=(datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")) # Termina amanhã para incluir hoje
+        self.data_fim_var = tk.StringVar(value=(datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d"))
         self.filter_vendedor_var = tk.StringVar(value="Todos")
         self.filter_cliente_var = tk.StringVar(value="Todos")
         self.filter_pagamento_var = tk.StringVar(value="Todos")
@@ -24,10 +24,10 @@ class RelatoriosGUI(ttk.Frame):
         self.filter_pagamento_options = ["Todos", "Dinheiro", "Cartao", "Pix", "A Prazo"]
         self.filter_tipo_cartao_options = ["Todos", "Crédito", "Débito", "N/A"]
 
-        self._load_vendedores_clientes_for_filters() # Carrega vendedores e clientes para os dropdowns
+        self._load_vendedores_clientes_for_filters()
 
         self.create_widgets()
-        self.load_relatorio_vendas() # Carrega o relatório inicial
+        self.load_relatorio_vendas()
 
     def get_db_connection(self):
         conn = sqlite3.connect(DATABASE_NAME)
@@ -50,7 +50,6 @@ class RelatoriosGUI(ttk.Frame):
             self.vendedores_dict[v['nome']] = v['id']
             self.vendedor_nomes_for_filter.append(v['nome'])
 
-        # Atualiza o OptionMenu de vendedor no filtro (se já existe)
         if hasattr(self, 'vendedor_menu') and self.vendedor_menu is not None:
             menu_vendedor = self.vendedor_menu["menu"]
             menu_vendedor.delete(0, "end")
@@ -70,7 +69,6 @@ class RelatoriosGUI(ttk.Frame):
         
         conn.close()
 
-        # Atualiza o OptionMenu de cliente no filtro (se já existe)
         if hasattr(self, 'cliente_menu') and self.cliente_menu is not None:
             menu_cliente = self.cliente_menu["menu"]
             menu_cliente.delete(0, "end")
@@ -172,7 +170,7 @@ class RelatoriosGUI(ttk.Frame):
         self.total_pontos_utilizados_label = ttk.Label(summary_frame, text="Total Pontos Utilizados: 0", font=("Arial", 11, "bold"))
         self.total_pontos_utilizados_label.grid(row=0, column=3, sticky="w", padx=5, pady=2)
 
-        self.total_final_label = ttk.Label(summary_frame, text="TOTAL LÍQUIDO ARRECADADO: R$ 0.00", font=("Arial", 14, "bold"), foreground="green")
+        self.total_final_label = ttk.Label(summary_frame, text="TOTAL LÍQUIDO ARRECADAADO: R$ 0.00", font=("Arial", 14, "bold"), foreground="green")
         self.total_final_label.grid(row=1, column=0, columnspan=4, sticky="w", padx=5, pady=5)
 
 
@@ -280,7 +278,7 @@ class RelatoriosGUI(ttk.Frame):
         self.total_descontos_label.config(text=f"Total de Descontos: R$ {total_descontos_acumulado:.2f}")
         self.total_juros_label.config(text=f"Total de Juros: R$ {total_juros_acumulado:.2f}")
         self.total_pontos_utilizados_label.config(text=f"Total Pontos Utilizados: {total_pontos_utilizados_acumulado}")
-        self.total_final_label.config(text=f"TOTAL LÍQUIDO ARRECADADO: R$ {total_final_acumulado:.2f}")
+        self.total_final_label.config(text=f"TOTAL LÍQUIDO ARRECADAADO: R$ {total_final_acumulado:.2f}")
 
     def on_right_click_tree(self, event):
         selected_item_id = self.vendas_tree.identify_row(event.y)
